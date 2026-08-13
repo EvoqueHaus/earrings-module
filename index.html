@@ -21,8 +21,11 @@
     background: var(--bg); color: var(--text);
     font-family: -apple-system, "Segoe UI", Inter, sans-serif;
   }
-  #app { position: relative; width: 100%; height: 100%; }
-  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+  #app { position: relative; width: 100%; height: 100%; overflow: hidden; }
+  canvas {
+    position: absolute; top: 0; left: 0; z-index: 1;
+    display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair;
+  }
 
   #topbar {
     position: absolute; top: 0; left: 0; right: 0;
@@ -60,6 +63,12 @@
   button.primary { background: var(--accent); color: #1c1c1e; font-weight: 600; }
   button.primary:hover:not(:disabled) { background: #d68950; }
   button.danger { color: var(--danger); }
+  button.active { border-color: var(--accent); color: var(--accent); }
+
+  #bgImage {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 0; pointer-events: none; max-width: none;
+  }
 
   #stepper {
     position: absolute; bottom: 0; left: 0; right: 0;
@@ -100,11 +109,12 @@
 <body>
 
 <div id="app">
+  <img id="bgImage" alt="">
   <canvas id="canvas" resize></canvas>
 
   <div id="topbar">
     <h1>Topitos — dibuja tu figura</h1>
-    <div id="hint">rueda: zoom · espacio + arrastrar: paneo</div>
+    <div id="hint">rueda: zoom · clic derecho sostenido: paneo</div>
   </div>
 
   <div id="readout"></div>
@@ -113,6 +123,7 @@
   <div id="actionbar">
     <button id="btnSmooth" disabled>Suavizar trazo</button>
     <button id="btnHole" disabled>Agregar agujero interno</button>
+    <button id="btnNodeEdit" disabled>Editar nodos</button>
     <button id="btnReset" class="danger">Reiniciar</button>
     <button id="btnAccept" class="primary" disabled>Aceptar diseño</button>
   </div>
@@ -145,7 +156,7 @@
    cierre (1mm) o de puentes (1mm).
    ============================================================ */
 const SQUARE_MM = 10;
-const CLOSE_THRESHOLD_MM = 1;
+const CLOSE_THRESHOLD_MM = 0.2;
 const MIN_BRIDGE_MM = 1;
 const MIN_ZOOM = 8;
 const MAX_ZOOM = 400;
@@ -190,16 +201,19 @@ let holePath = null;
 let mode = 'outer';       // 'outer' | 'hole' | 'review-outer' | 'review-hole' | 'done'
 let drawingSegment = null;
 let dragOrigin = null;
-let spaceDown = false;
-let panOrigin = null;
+let isPanning = false;
+let nodeEditMode = false;
+let activeNodeHit = null; // { segment, type: 'segment' | 'handle-in' | 'handle-out' }
 
 const $ = id => document.getElementById(id);
 const readout = $('readout');
 const warning = $('warning');
 const btnSmooth = $('btnSmooth');
 const btnHole = $('btnHole');
+const btnNodeEdit = $('btnNodeEdit');
 const btnAccept = $('btnAccept');
 const btnReset = $('btnReset');
+const bgImage = $('bgImage');
 
 function newPath() {
   const p = new paper.Path();
@@ -215,9 +229,22 @@ function newPath() {
    clic + arrastrar = ancla con manejadores/curva)
    ============================================================ */
 const tool = new paper.Tool();
+const canvasEl = document.getElementById('canvas');
+
+// Estilo Rhino: el botón derecho nunca dibuja ni selecciona, solo panea.
+canvasEl.addEventListener('contextmenu', (e) => e.preventDefault());
 
 tool.onMouseDown = (event) => {
-  if (spaceDown) { panOrigin = event.point; return; }
+  if (event.event.button === 2) { isPanning = true; return; }
+
+  if (nodeEditMode) {
+    const hitOptions = { segments: true, handles: true, tolerance: 8 / paper.view.zoom };
+    let hit = outerPath && outerPath.hitTest(event.point, hitOptions);
+    if (!hit && holePath) hit = holePath.hitTest(event.point, hitOptions);
+    activeNodeHit = hit || null;
+    return;
+  }
+
   if (mode !== 'outer' && mode !== 'hole') return;
 
   const activePath = mode === 'outer' ? outerPath : holePath;
@@ -239,26 +266,29 @@ tool.onMouseDown = (event) => {
 };
 
 tool.onMouseDrag = (event) => {
-  if (spaceDown && panOrigin) {
-    const delta = event.point.subtract(panOrigin);
-    paper.view.center = paper.view.center.subtract(delta);
+  if (isPanning) { paper.view.center = paper.view.center.subtract(event.delta); return; }
+
+  if (nodeEditMode) {
+    if (!activeNodeHit) return;
+    const seg = activeNodeHit.segment;
+    if (activeNodeHit.type === 'segment') seg.point = seg.point.add(event.delta);
+    else if (activeNodeHit.type === 'handle-in') seg.handleIn = seg.handleIn.add(event.delta);
+    else if (activeNodeHit.type === 'handle-out') seg.handleOut = seg.handleOut.add(event.delta);
     return;
   }
+
   if (!drawingSegment) return;
   const handle = event.point.subtract(dragOrigin);
   drawingSegment.handleOut = handle;
   drawingSegment.handleIn = handle.multiply(-1);
 };
 
-tool.onMouseUp = () => { drawingSegment = null; };
+tool.onMouseUp = () => { drawingSegment = null; isPanning = false; activeNodeHit = null; };
 
 tool.onMouseMove = (event) => {
   const p = event.point;
   readout.textContent = `x: ${p.x.toFixed(2)}mm   y: ${p.y.toFixed(2)}mm   zoom: ${paper.view.zoom.toFixed(0)}x`;
 };
-
-window.addEventListener('keydown', (e) => { if (e.code === 'Space') { spaceDown = true; document.body.style.cursor = 'grab'; } });
-window.addEventListener('keyup', (e) => { if (e.code === 'Space') { spaceDown = false; panOrigin = null; document.body.style.cursor = ''; } });
 
 document.getElementById('canvas').addEventListener('wheel', (event) => {
   event.preventDefault();
@@ -282,6 +312,7 @@ function closeActivePath() {
     mode = 'review-outer';
     btnSmooth.disabled = false;
     btnHole.disabled = false;
+    btnNodeEdit.disabled = false;
     btnAccept.disabled = false;
     openConfirm('Figura completa', '¿Confirmas este diseño o prefieres reiniciar?');
   } else if (mode === 'hole') {
@@ -317,6 +348,15 @@ btnSmooth.addEventListener('click', () => {
   if (holePath) holePath.smooth({ type: 'continuous' });
 });
 
+btnNodeEdit.addEventListener('click', () => {
+  nodeEditMode = !nodeEditMode;
+  btnNodeEdit.classList.toggle('active', nodeEditMode);
+  btnNodeEdit.textContent = nodeEditMode ? 'Editar nodos (activo)' : 'Editar nodos';
+  canvasEl.style.cursor = nodeEditMode ? 'default' : 'crosshair';
+  if (outerPath) outerPath.fullySelected = nodeEditMode;
+  if (holePath) holePath.fullySelected = nodeEditMode;
+});
+
 btnHole.addEventListener('click', () => {
   if (holePath) {
     holePath.remove();
@@ -341,6 +381,11 @@ function resetAll() {
   btnSmooth.disabled = true;
   btnHole.disabled = true;
   btnHole.textContent = 'Agregar agujero interno';
+  nodeEditMode = false;
+  btnNodeEdit.disabled = true;
+  btnNodeEdit.classList.remove('active');
+  btnNodeEdit.textContent = 'Editar nodos';
+  canvasEl.style.cursor = 'crosshair';
   btnAccept.disabled = true;
   closeConfirm();
 }
@@ -359,6 +404,41 @@ function closeConfirm() { modal.style.display = 'none'; }
 $('btnConfirmReset').addEventListener('click', resetAll);
 $('btnConfirmAccept').addEventListener('click', () => { closeConfirm(); acceptDesign(); });
 btnAccept.addEventListener('click', acceptDesign);
+
+/* ============================================================
+   FONDO DESDE EL SPREADSHEET
+   Hoja "Background": A1 = imagen, B1 = escala (10–100%),
+   C1 = color de fondo de toda la app en hex (con "#").
+   Reemplaza BACKGROUND_CONFIG_URL por la URL de tu Web App de
+   Apps Script (doGet) que devuelva JSON:
+   { "image": "...", "scale": 60, "color": "#141414" }
+   ============================================================ */
+const BACKGROUND_CONFIG_URL = 'https://script.google.com/macros/s/AKfycbzUR65t2RJ6cuBtM-BxB5bw3loLe9BOZlYnz1FRgChnHtX8BzBR6d5kc4d-hgToGXFH/exec';
+
+async function loadBackgroundConfig() {
+  if (!BACKGROUND_CONFIG_URL || BACKGROUND_CONFIG_URL.startsWith('PON_AQUI')) {
+    console.warn('BACKGROUND_CONFIG_URL sin configurar — se omite la carga de fondo del spreadsheet.');
+    return;
+  }
+  try {
+    const res = await fetch(BACKGROUND_CONFIG_URL);
+    const data = await res.json();
+
+    if (typeof data.color === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(data.color)) {
+      document.documentElement.style.setProperty('--bg', data.color);
+    }
+
+    if (data.image) {
+      bgImage.src = data.image;
+      const scale = Math.min(100, Math.max(10, Number(data.scale) || 100));
+      bgImage.style.width = scale + '%';
+      bgImage.style.height = 'auto';
+    }
+  } catch (err) {
+    console.error('No se pudo cargar el fondo desde el spreadsheet:', err);
+  }
+}
+loadBackgroundConfig();
 
 /* ============================================================
    ACEPTAR DISEÑO — punto de entrega hacia el siguiente paso
