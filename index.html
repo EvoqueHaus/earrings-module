@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Topitos — Editor de figura</title>
+<style>
+  :root {
+    --bg: #1c1c1e;
+    --panel: #232326;
+    --line: rgba(255,255,255,0.08);
+    --square: #7a7a82;
+    --accent: #c8793f;      /* cobre, tono de metal crudo antes del baño en plata/oro */
+    --text: #eceCEF;
+    --text-dim: #9a9aa0;
+    --danger: #d16565;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+  }
+  #app { position: relative; width: 100%; height: 100%; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+
+  #topbar {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px;
+    background: linear-gradient(to bottom, rgba(28,28,30,0.9), transparent);
+    pointer-events: none;
+  }
+  #topbar h1 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
+  #hint { font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; color: var(--text-dim); }
+  #readout {
+    position: absolute; top: 46px; left: 20px;
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 12px; color: var(--text-dim);
+    pointer-events: none;
+  }
+
+  #actionbar {
+    position: absolute; bottom: 56px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px;
+  }
+  button {
+    font-family: inherit; font-size: 13px; font-weight: 500;
+    background: transparent; color: var(--text);
+    border: 1px solid transparent; border-radius: 7px;
+    padding: 8px 14px; cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  button:hover:not(:disabled) { background: rgba(255,255,255,0.06); }
+  button:disabled { color: var(--text-dim); cursor: not-allowed; opacity: 0.5; }
+  button.primary { background: var(--accent); color: #1c1c1e; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: #d68950; }
+  button.danger { color: var(--danger); }
+
+  #stepper {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: center; gap: 28px;
+    padding: 16px 0;
+    background: linear-gradient(to top, rgba(28,28,30,0.9), transparent);
+  }
+  .step { display: flex; align-items: center; gap: 8px; opacity: 0.4; }
+  .step.active { opacity: 1; }
+  .step-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); }
+  .step.active .step-dot { background: var(--accent); }
+  .step-label { font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; }
+
+  #warning {
+    position: absolute; top: 46px; left: 50%; transform: translateX(-50%);
+    background: rgba(209,101,101,0.15);
+    border: 1px solid var(--danger);
+    color: #f0b8b8;
+    font-size: 12px;
+    padding: 8px 14px; border-radius: 8px;
+    display: none;
+  }
+
+  #confirmModal {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: none; align-items: center; justify-content: center;
+  }
+  #confirmModal .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 24px 28px; width: 300px; text-align: center;
+  }
+  #confirmModal h2 { font-size: 15px; margin: 0 0 4px; }
+  #confirmModal p { font-size: 12px; color: var(--text-dim); margin: 0 0 18px; }
+  #confirmModal .row { display: flex; gap: 8px; justify-content: center; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <canvas id="canvas" resize></canvas>
+
+  <div id="topbar">
+    <h1>Topitos — dibuja tu figura</h1>
+    <div id="hint">rueda: zoom · espacio + arrastrar: paneo</div>
+  </div>
+
+  <div id="readout"></div>
+  <div id="warning">El puente entre el agujero y el borde es menor a 1&nbsp;mm — ajusta el agujero.</div>
+
+  <div id="actionbar">
+    <button id="btnSmooth" disabled>Suavizar trazo</button>
+    <button id="btnHole" disabled>Agregar agujero interno</button>
+    <button id="btnReset" class="danger">Reiniciar</button>
+    <button id="btnAccept" class="primary" disabled>Aceptar diseño</button>
+  </div>
+
+  <div id="stepper">
+    <div class="step"><div class="step-dot"></div><div class="step-label">1 · Importar</div></div>
+    <div class="step active"><div class="step-dot"></div><div class="step-label">2 · Dibujar</div></div>
+    <div class="step"><div class="step-dot"></div><div class="step-label">3 · Extrusión 3D</div></div>
+  </div>
+
+  <div id="confirmModal">
+    <div class="card">
+      <h2 id="confirmTitle">Figura completa</h2>
+      <p id="confirmBody">¿Confirmas este diseño o prefieres reiniciar?</p>
+      <div class="row">
+        <button id="btnConfirmReset" class="danger">Reiniciar</button>
+        <button id="btnConfirmAccept" class="primary">Aceptar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-full.min.js"></script>
+<script>
+/* ============================================================
+   CONFIGURACIÓN — todas las unidades de "paper" son mm reales,
+   así que cualquier distancia en project-space ya está en mm,
+   sin importar el nivel de zoom. Esto es lo que permite que el
+   usuario se acerque a detallar sin romper la validación de
+   cierre (1mm) o de puentes (1mm).
+   ============================================================ */
+const SQUARE_MM = 10;
+const CLOSE_THRESHOLD_MM = 1;
+const MIN_BRIDGE_MM = 1;
+const MIN_ZOOM = 8;
+const MAX_ZOOM = 400;
+
+paper.setup('canvas');
+
+function fitView() {
+  const targetPx = paper.view.viewSize.height * 0.7;
+  paper.view.zoom = targetPx / SQUARE_MM;
+  paper.view.center = new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2);
+}
+fitView();
+window.addEventListener('resize', fitView);
+
+const gridLayer = new paper.Layer();
+function drawGrid() {
+  gridLayer.removeChildren();
+  for (let i = 0; i <= SQUARE_MM; i++) {
+    const v = new paper.Path.Line(new paper.Point(i, 0), new paper.Point(i, SQUARE_MM));
+    const h = new paper.Path.Line(new paper.Point(0, i), new paper.Point(SQUARE_MM, i));
+    [v, h].forEach(l => {
+      l.strokeColor = 'rgba(255,255,255,0.06)';
+      l.strokeWidth = 1;
+      l.strokeScaling = false;
+    });
+  }
+  const border = new paper.Path.Rectangle(new paper.Point(0, 0), new paper.Point(SQUARE_MM, SQUARE_MM));
+  border.strokeColor = '#7a7a82';
+  border.strokeWidth = 1;
+  border.strokeScaling = false;
+}
+drawGrid();
+
+const drawLayer = new paper.Layer();
+paper.project.activeLayer = drawLayer;
+
+/* ============================================================
+   ESTADO
+   ============================================================ */
+let outerPath = null;
+let holePath = null;
+let mode = 'outer';       // 'outer' | 'hole' | 'review-outer' | 'review-hole' | 'done'
+let drawingSegment = null;
+let dragOrigin = null;
+let spaceDown = false;
+let panOrigin = null;
+
+const $ = id => document.getElementById(id);
+const readout = $('readout');
+const warning = $('warning');
+const btnSmooth = $('btnSmooth');
+const btnHole = $('btnHole');
+const btnAccept = $('btnAccept');
+const btnReset = $('btnReset');
+
+function newPath() {
+  const p = new paper.Path();
+  p.strokeColor = '#eceCEF';
+  p.strokeWidth = 1.5;
+  p.strokeScaling = false;
+  p.fillColor = null;
+  return p;
+}
+
+/* ============================================================
+   HERRAMIENTA DE DIBUJO (tipo pluma: clic = ancla recta,
+   clic + arrastrar = ancla con manejadores/curva)
+   ============================================================ */
+const tool = new paper.Tool();
+
+tool.onMouseDown = (event) => {
+  if (spaceDown) { panOrigin = event.point; return; }
+  if (mode !== 'outer' && mode !== 'hole') return;
+
+  const activePath = mode === 'outer' ? outerPath : holePath;
+
+  if (activePath && activePath.segments.length > 2) {
+    const start = activePath.firstSegment.point;
+    if (event.point.getDistance(start) <= CLOSE_THRESHOLD_MM) {
+      closeActivePath();
+      return;
+    }
+  }
+
+  if (mode === 'outer' && !outerPath) outerPath = newPath();
+  if (mode === 'hole' && !holePath) holePath = newPath();
+
+  const path = mode === 'outer' ? outerPath : holePath;
+  drawingSegment = path.add(event.point);
+  dragOrigin = event.point;
+};
+
+tool.onMouseDrag = (event) => {
+  if (spaceDown && panOrigin) {
+    const delta = event.point.subtract(panOrigin);
+    paper.view.center = paper.view.center.subtract(delta);
+    return;
+  }
+  if (!drawingSegment) return;
+  const handle = event.point.subtract(dragOrigin);
+  drawingSegment.handleOut = handle;
+  drawingSegment.handleIn = handle.multiply(-1);
+};
+
+tool.onMouseUp = () => { drawingSegment = null; };
+
+tool.onMouseMove = (event) => {
+  const p = event.point;
+  readout.textContent = `x: ${p.x.toFixed(2)}mm   y: ${p.y.toFixed(2)}mm   zoom: ${paper.view.zoom.toFixed(0)}x`;
+};
+
+window.addEventListener('keydown', (e) => { if (e.code === 'Space') { spaceDown = true; document.body.style.cursor = 'grab'; } });
+window.addEventListener('keyup', (e) => { if (e.code === 'Space') { spaceDown = false; panOrigin = null; document.body.style.cursor = ''; } });
+
+document.getElementById('canvas').addEventListener('wheel', (event) => {
+  event.preventDefault();
+  const oldZoom = paper.view.zoom;
+  const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+  const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, oldZoom * factor));
+
+  const mousePosition = paper.view.viewToProject(new paper.Point(event.offsetX, event.offsetY));
+  const beta = oldZoom / newZoom;
+  const centerVec = mousePosition.subtract(paper.view.center);
+  paper.view.center = mousePosition.subtract(centerVec.multiply(beta));
+  paper.view.zoom = newZoom;
+}, { passive: false });
+
+/* ============================================================
+   CIERRE, SUAVIZADO, AGUJERO, VALIDACIÓN
+   ============================================================ */
+function closeActivePath() {
+  if (mode === 'outer') {
+    outerPath.closed = true;
+    mode = 'review-outer';
+    btnSmooth.disabled = false;
+    btnHole.disabled = false;
+    btnAccept.disabled = false;
+    openConfirm('Figura completa', '¿Confirmas este diseño o prefieres reiniciar?');
+  } else if (mode === 'hole') {
+    holePath.closed = true;
+    const bridge = minBridgeDistance(outerPath, holePath);
+    warning.style.display = bridge < MIN_BRIDGE_MM ? 'block' : 'none';
+    mode = 'review-hole';
+    btnHole.textContent = 'Quitar agujero interno';
+    btnAccept.disabled = false;
+    openConfirm('Agujero agregado', bridge < MIN_BRIDGE_MM
+      ? 'El puente mínimo quedó por debajo de 1mm. Revisa el agujero antes de aceptar.'
+      : '¿Confirmas este diseño o prefieres reiniciar?');
+  }
+}
+
+/* Distancia mínima aproximada entre el agujero y el borde exterior,
+   muestreando puntos a lo largo del agujero. Suficiente para el
+   prototipo; en producción conviene una medida analítica exacta. */
+function minBridgeDistance(outer, hole) {
+  const samples = 120;
+  let min = Infinity;
+  for (let i = 0; i <= samples; i++) {
+    const point = hole.getPointAt((hole.length * i) / samples);
+    if (!point) continue;
+    const nearest = outer.getNearestPoint(point);
+    min = Math.min(min, point.getDistance(nearest));
+  }
+  return min;
+}
+
+btnSmooth.addEventListener('click', () => {
+  outerPath.smooth({ type: 'continuous' });
+  if (holePath) holePath.smooth({ type: 'continuous' });
+});
+
+btnHole.addEventListener('click', () => {
+  if (holePath) {
+    holePath.remove();
+    holePath = null;
+    warning.style.display = 'none';
+    btnHole.textContent = 'Agregar agujero interno';
+    mode = 'review-outer';
+    return;
+  }
+  mode = 'hole';
+  btnAccept.disabled = true;
+});
+
+btnReset.addEventListener('click', resetAll);
+
+function resetAll() {
+  if (outerPath) outerPath.remove();
+  if (holePath) holePath.remove();
+  outerPath = null; holePath = null;
+  mode = 'outer';
+  warning.style.display = 'none';
+  btnSmooth.disabled = true;
+  btnHole.disabled = true;
+  btnHole.textContent = 'Agregar agujero interno';
+  btnAccept.disabled = true;
+  closeConfirm();
+}
+
+/* ============================================================
+   MODAL ACEPTAR / REINICIAR
+   ============================================================ */
+const modal = $('confirmModal');
+function openConfirm(title, body) {
+  $('confirmTitle').textContent = title;
+  $('confirmBody').textContent = body;
+  modal.style.display = 'flex';
+}
+function closeConfirm() { modal.style.display = 'none'; }
+
+$('btnConfirmReset').addEventListener('click', resetAll);
+$('btnConfirmAccept').addEventListener('click', () => { closeConfirm(); acceptDesign(); });
+btnAccept.addEventListener('click', acceptDesign);
+
+/* ============================================================
+   ACEPTAR DISEÑO — punto de entrega hacia el siguiente paso
+   (extrusión 3D a 0.8mm). Por ahora deja los datos listos en
+   consola y en pantalla para verificar que el path sale limpio.
+   ============================================================ */
+function acceptDesign() {
+  const totalLengthMm = outerPath.length + (holePath ? holePath.length : 0);
+  const payload = {
+    outerSVG: outerPath.pathData,
+    holeSVG: holePath ? holePath.pathData : null,
+    totalLengthMm: Number(totalLengthMm.toFixed(3)),
+  };
+  console.log('Diseño aceptado →', payload);
+  // TODO(paso 3): pasar `payload` al módulo de extrusión 3D
+  // (THREE.Shape + holes + ExtrudeGeometry a 0.8mm de espesor).
+  mode = 'done';
+  readout.textContent = `Longitud total: ${payload.totalLengthMm}mm — listo para extrusión`;
+}
+</script>
+</body>
+</html>
