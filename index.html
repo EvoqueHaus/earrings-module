@@ -303,7 +303,7 @@ const MIN_BRIDGE_MM = 1;
 const MIN_ZOOM = 8;
 const MAX_ZOOM = 400;
 
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxFadCSx3bdtHeC2pZoh4LWGV9eQS7E4vjbuvTW77ON_BN0wiVtjEjsSxoCngJCKWrK/exec';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbx9-WV3BJf3ZPa_9Eciq9i2WqzOOPLjOLCQut9TR15ZHV9NcbdIwOgeixu9OWbreD0M/exec';
 const DESIGN_KEY = 'topitos-design';
 const TRACE_KEY = 'topitos-trace';
 
@@ -1184,12 +1184,34 @@ async function fetchMotifSVG(url) {
     if (cached) return cached;
   } catch (e) {}
 
-  const res = await fetch(CONFIG_URL + '?svg=' + encodeURIComponent(url));
-  const data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'no se pudo descargar el motivo');
+  let svg = null;
+  let directError = null;
 
-  try { localStorage.setItem(cacheKey, data.svg); } catch (e) { /* cuota llena: sigue sin caché */ }
-  return data.svg;
+  // 1) Directo desde el CDN. Cloudinary manda cabeceras CORS, así que el
+  //    navegador puede bajar el SVG sin pasar por el Web App.
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error('el CDN respondió ' + res.status);
+    const text = await res.text();
+    if (text.indexOf('<svg') === -1) throw new Error('el archivo no es un SVG');
+    svg = text;
+  } catch (err) {
+    directError = err;
+  }
+
+  // 2) Proxy del Web App. Solo se usa para orígenes sin CORS (por ejemplo
+  //    archivos alojados en Drive); requiere el permiso de red del script.
+  if (!svg) {
+    const res = await fetch(CONFIG_URL + '?svg=' + encodeURIComponent(url));
+    const data = await res.json();
+    if (!data.ok) {
+      throw new Error(data.error || (directError && directError.message) || 'no se pudo descargar el motivo');
+    }
+    svg = data.svg;
+  }
+
+  try { localStorage.setItem(cacheKey, svg); } catch (e) { /* cuota llena: sigue sin caché */ }
+  return svg;
 }
 
 async function chooseMotif(item, i) {
