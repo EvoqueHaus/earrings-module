@@ -28,7 +28,7 @@
   }
 
   #topbar {
-    position: absolute; top: 0; left: 0; right: 0;
+    position: absolute; top: 0; left: 0; right: 0; z-index: 2;
     display: flex; align-items: center; justify-content: space-between;
     padding: 14px 20px;
     background: linear-gradient(to bottom, rgba(28,28,30,0.9), transparent);
@@ -37,14 +37,14 @@
   #topbar h1 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
   #hint { font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; color: var(--text-dim); }
   #readout {
-    position: absolute; top: 46px; left: 20px;
+    position: absolute; top: 46px; left: 20px; z-index: 2;
     font-family: "SFMono-Regular", Menlo, Consolas, monospace;
     font-size: 12px; color: var(--text-dim);
     pointer-events: none;
   }
 
   #actionbar {
-    position: absolute; bottom: 56px; left: 50%; transform: translateX(-50%);
+    position: absolute; bottom: 56px; left: 50%; transform: translateX(-50%); z-index: 2;
     display: flex; gap: 8px;
     background: var(--panel);
     border: 1px solid var(--line);
@@ -71,7 +71,7 @@
   }
 
   #stepper {
-    position: absolute; bottom: 0; left: 0; right: 0;
+    position: absolute; bottom: 0; left: 0; right: 0; z-index: 2;
     display: flex; align-items: center; justify-content: center; gap: 28px;
     padding: 16px 0;
     background: linear-gradient(to top, rgba(28,28,30,0.9), transparent);
@@ -83,7 +83,7 @@
   .step-label { font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; }
 
   #warning {
-    position: absolute; top: 46px; left: 50%; transform: translateX(-50%);
+    position: absolute; top: 46px; left: 50%; transform: translateX(-50%); z-index: 2;
     background: rgba(209,101,101,0.15);
     border: 1px solid var(--danger);
     color: #f0b8b8;
@@ -93,7 +93,7 @@
   }
 
   #confirmModal {
-    position: absolute; inset: 0;
+    position: absolute; inset: 0; z-index: 10;
     background: rgba(0,0,0,0.55);
     display: none; align-items: center; justify-content: center;
   }
@@ -106,7 +106,7 @@
   #confirmModal .row { display: flex; gap: 8px; justify-content: center; }
 
   #importScreen {
-    position: absolute; inset: 0; z-index: 5;
+    position: absolute; inset: 0; z-index: 10;
     background: var(--bg);
     display: flex; align-items: center; justify-content: center;
   }
