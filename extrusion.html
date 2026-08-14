@@ -151,8 +151,17 @@
     background: rgba(255,255,255,0.03); border: 1px solid var(--line);
     text-align: center;
   }
-  #qrBlock img { width: 140px; height: 140px; object-fit: contain; background: #fff; border-radius: 8px; padding: 8px; }
+  #qrBlock img {
+    width: 100%; max-width: 240px; aspect-ratio: 1 / 1; object-fit: contain;
+    background: #fff; border-radius: 8px; padding: 10px;
+  }
   #qrBlock p { font-size: 12px; color: var(--text-dim); margin: 10px 0 0; line-height: 1.5; }
+  #btnQrDownload {
+    margin-top: 10px; width: 100%; font-family: inherit; font-size: 12px; padding: 9px;
+    border-radius: 7px; border: 1px solid var(--line);
+    background: rgba(255,255,255,0.04); color: var(--text); cursor: pointer;
+  }
+  #btnQrDownload:hover { background: rgba(255,255,255,0.1); }
 
   #orderStatus { font-size: 12px; color: var(--text-dim); margin-top: 14px; min-height: 14px; }
   #orderStatus.error { color: #e08a8a; }
@@ -202,7 +211,7 @@
       </div>
 
       <div class="block">
-        <h2>Rotación <span class="sublabel">eje vertical</span></h2>
+        <h2>Rotación <span class="sublabel">sobre el eje del vástago</span></h2>
         <div class="slider-label"><span>Ángulo</span><span id="rotValue">0°</span></div>
         <input id="rotSlider" type="range" min="0" max="360" step="1" value="0">
       </div>
@@ -253,6 +262,7 @@
         <div id="qrBlock">
           <img id="qrImage" alt="Código QR de pago">
           <p>Escanea este código QR para realizar el pago. Cuando lo hayas hecho, sube el comprobante en el siguiente campo.</p>
+          <button type="button" id="btnQrDownload">Descargar el código QR</button>
         </div>
 
         <label for="ofReceipt">Comprobante de pago</label>
@@ -290,7 +300,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
    ============================================================ */
 const DESIGN_KEY = 'topitos-design';
 const VIEW_KEY = 'topitos-3d';
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxFadCSx3bdtHeC2pZoh4LWGV9eQS7E4vjbuvTW77ON_BN0wiVtjEjsSxoCngJCKWrK/exec';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbx9-WV3BJf3ZPa_9Eciq9i2WqzOOPLjOLCQut9TR15ZHV9NcbdIwOgeixu9OWbreD0M/exec';
 
 const PIECE_DEPTH_MM = 0.8;
 const STEM_LENGTH_MM = 10;
@@ -322,7 +332,8 @@ function saveViewState() {
   viewState.finish = currentFinishKey;
   viewState.rotationDeg = rotationDeg;
   viewState.flip = flip;
-  viewState.stem = { x: stemA.position.x, y: stemA.position.y, z: stemA.position.z };
+  viewState.stem = { x: stemPos.x, y: stemPos.y, z: stemPos.z };
+  viewState.anchor = { x: pieceAnchor.x, y: pieceAnchor.y, z: pieceAnchor.z };
   try { sessionStorage.setItem(VIEW_KEY, JSON.stringify(viewState)); } catch (e) {}
 }
 window.addEventListener('pagehide', saveViewState);
@@ -447,12 +458,16 @@ const clutchRingGeometry = new THREE.TorusGeometry(0.55, 0.14, 10, 24);
 function buildEarring() {
   const group = new THREE.Group();
 
-  const piece = new THREE.Group();
-  pieceGeometries.forEach(g => piece.add(new THREE.Mesh(g, material)));
-  group.add(piece);
+  /* La figura cuelga de un pivote situado en el vástago. Así el giro ocurre
+     alrededor del eje del poste (que es lo que queda fijo en la oreja) y no
+     alrededor del centro de la figura. */
+  const pivot = new THREE.Group();
+  const pieceHolder = new THREE.Group();
+  pieceGeometries.forEach(g => pieceHolder.add(new THREE.Mesh(g, material)));
+  pivot.add(pieceHolder);
+  group.add(pivot);
 
   const stem = new THREE.Group();
-  stem.position.set(0, 0, PIECE_DEPTH_MM / 2); // nace pegado a la cara trasera
 
   const rod = new THREE.Mesh(rodGeometry, material);
   rod.rotation.x = Math.PI / 2;          // el vástago sale hacia +Z
@@ -467,7 +482,7 @@ function buildEarring() {
   stem.add(clutch);
 
   group.add(stem);
-  return { group, stem };
+  return { group, pivot, pieceHolder, stem };
 }
 
 const spacing = Math.max(pieceSize.x, 4) * 0.75;
@@ -481,25 +496,62 @@ const B = buildEarring();
 holderA.add(A.group);
 holderB.add(B.group);
 const stemA = A.stem;
-const stemB = B.stem;
 
-if (viewState.stem) stemA.position.set(viewState.stem.x, viewState.stem.y, viewState.stem.z);
+/* ---------- Estado compartido por los dos aretes ----------
+   stemPos/stemQuat: dónde está y cómo está inclinado el poste.
+   pieceAnchor:      posición de la figura sin rotar.
+   theta:            giro de la figura alrededor del eje del poste. */
+const stemPos = new THREE.Vector3(0, 0, PIECE_DEPTH_MM / 2);
+const stemQuat = new THREE.Quaternion();
+const pieceAnchor = new THREE.Vector3(0, 0, 0);
+let theta = THREE.MathUtils.degToRad(Number(viewState.rotationDeg) || 0);
+const pivotQuat = new THREE.Quaternion();
 
-/* "Voltear" invierte el eje de simetría del par: el arete que era el
-   espejo pasa a ser el original y viceversa.
-   Con escala negativa en X, la rotación equivalente en el gemelo es la
-   opuesta — de lo contrario el par deja de ser simétrico al rotarlo. */
-let flip = viewState.flip === -1 ? -1 : 1;
-let rotationDeg = Number(viewState.rotationDeg) || 0;
+if (viewState.stem) stemPos.set(viewState.stem.x, viewState.stem.y, viewState.stem.z);
+if (viewState.anchor) pieceAnchor.set(viewState.anchor.x, viewState.anchor.y, viewState.anchor.z);
 
-function orientEarring(group, sign, deg) {
-  group.scale.x = sign;
-  group.rotation.y = THREE.MathUtils.degToRad(sign > 0 ? deg : -deg);
+/* El eje de giro es el del vástago: su +Z local, ya inclinado si el cliente
+   movió el poste con el Control de Movimiento. */
+function stemAxis() {
+  return new THREE.Vector3(0, 0, 1).applyQuaternion(stemQuat).normalize();
 }
 
+function pieceWorldPosition() {
+  return stemPos.clone().add(pieceAnchor.clone().sub(stemPos).applyQuaternion(pivotQuat));
+}
+
+function applyState() {
+  pivotQuat.setFromAxisAngle(stemAxis(), theta);
+  [A, B].forEach((E) => {
+    E.stem.position.copy(stemPos);
+    E.stem.quaternion.copy(stemQuat);
+    E.pivot.position.copy(stemPos);
+    E.pivot.quaternion.copy(pivotQuat);
+    E.pieceHolder.position.copy(pieceAnchor).sub(stemPos);
+  });
+}
+
+/* Al arrastrar el poste, la figura no debe saltar: se recalcula su anclaje
+   para que su posición en pantalla quede donde estaba antes del arrastre. */
+function onStemMoved() {
+  const worldBefore = pieceWorldPosition();
+  stemPos.copy(stemA.position);
+  stemQuat.copy(stemA.quaternion);
+  pivotQuat.setFromAxisAngle(stemAxis(), theta);
+  pieceAnchor.copy(worldBefore).sub(stemPos)
+    .applyQuaternion(pivotQuat.clone().invert())
+    .add(stemPos);
+  applyState();
+}
+
+/* "Voltear" invierte el eje de simetría del par. Como la rotación vive dentro
+   del grupo espejado, el reflejo sale correcto sin invertir el ángulo. */
+let flip = viewState.flip === -1 ? -1 : 1;
+
 function applyPairTransform() {
-  orientEarring(A.group, flip, rotationDeg);
-  orientEarring(B.group, -flip, rotationDeg);
+  A.group.scale.x = flip;
+  B.group.scale.x = -flip;
+  applyState();
 }
 applyPairTransform();
 
@@ -520,20 +572,10 @@ gumball.visible = false;
 gumball.enabled = false;
 scene.add(gumball);
 gumball.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
-
-/* El gemelo copia la transformación local: como su grupo padre está
-   espejado, el resultado en pantalla ya es el reflejo correcto. */
-gumball.addEventListener('objectChange', () => {
-  stemB.position.copy(stemA.position);
-  stemB.quaternion.copy(stemA.quaternion);
-});
+gumball.addEventListener('objectChange', onStemMoved);
 
 function setGumballMode(mode) {
   gumball.setMode(mode);
-  // En rotación solo tiene sentido el eje vertical: la pieza gira sobre Y.
-  gumball.showX = mode !== 'rotate';
-  gumball.showY = true;
-  gumball.showZ = mode !== 'rotate';
 }
 
 const btnStemToggle = document.getElementById('btnStemToggle');
@@ -548,7 +590,6 @@ window.addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === 'w') setGumballMode('translate');
   if (e.key.toLowerCase() === 'e') setGumballMode('rotate');
 });
-setGumballMode('translate');
 
 /* ---------- Voltear y rotar ---------- */
 document.getElementById('btnFlip').addEventListener('click', () => {
@@ -558,12 +599,14 @@ document.getElementById('btnFlip').addEventListener('click', () => {
 
 const rotSlider = document.getElementById('rotSlider');
 const rotValue = document.getElementById('rotValue');
+let rotationDeg = Math.round(THREE.MathUtils.radToDeg(theta));
 rotSlider.value = String(rotationDeg);
 rotValue.textContent = rotationDeg + '°';
 rotSlider.addEventListener('input', (e) => {
   rotationDeg = Number(e.target.value);
   rotValue.textContent = rotationDeg + '°';
-  applyPairTransform();
+  theta = THREE.MathUtils.degToRad(rotationDeg);
+  applyState();
 });
 
 /* ---------- Panel plegable ---------- */
@@ -696,6 +739,29 @@ function selectedCountryCode() {
   return countrySelect.selectedOptions[0].dataset.code;
 }
 
+/* Descarga del QR: se baja como blob para que el archivo quede guardado en el
+   dispositivo. Si el origen no manda cabeceras CORS (Drive, por ejemplo) no se
+   puede leer el blob, así que se abre en una pestaña para guardarlo a mano. */
+document.getElementById('btnQrDownload').addEventListener('click', async () => {
+  const src = document.getElementById('qrImage').src;
+  if (!src) return;
+  try {
+    const res = await fetch(src, { mode: 'cors' });
+    if (!res.ok) throw new Error('respuesta ' + res.status);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'topitos-qr-pago.' + ((blob.type.split('/')[1] || 'png').replace('svg+xml', 'svg'));
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (err) {
+    window.open(src, '_blank', 'noopener');
+  }
+});
+
 const orderModal = document.getElementById('orderModal');
 const orderForm = document.getElementById('orderForm');
 const orderStatus = document.getElementById('orderStatus');
@@ -755,7 +821,7 @@ orderForm.addEventListener('submit', async (event) => {
       estimatedPrice: unit * UNITS_PER_PAIR,
       rotationDeg,
       mirrored: flip === 1 ? 'estándar' : 'volteado',
-      stemPosition: { x: +stemA.position.x.toFixed(3), y: +stemA.position.y.toFixed(3), z: +stemA.position.z.toFixed(3) },
+      stemPosition: { x: +stemPos.x.toFixed(3), y: +stemPos.y.toFixed(3), z: +stemPos.z.toFixed(3) },
       outerSVG: design.outerSVG,
       holeSVG: design.holeSVG || '',
       receiptBase64,
