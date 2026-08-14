@@ -6,12 +6,12 @@
 <title>Topitos — Extrusión 3D</title>
 <style>
   :root {
-    --bg: #1c1c1e;
-    --panel: #232326;
-    --line: rgba(255,255,255,0.08);
-    --accent: #c8793f;
-    --text: #eceCEF;
-    --text-dim: #9a9aa0;
+    --bg: #0a0a0a;
+    --panel: #161616;
+    --line: rgba(255,255,255,0.12);
+    --accent: #ffffff;
+    --text: #f5f5f5;
+    --text-dim: #8a8a8a;
   }
   * { box-sizing: border-box; }
   html, body {
@@ -65,9 +65,9 @@
   button.stem-toggle.active { border-color: var(--accent); color: var(--accent); }
   button.confirm {
     width: 100%; font-size: 13px; font-weight: 600; padding: 10px;
-    border-radius: 7px; border: none; background: var(--accent); color: #1c1c1e; cursor: pointer;
+    border-radius: 7px; border: none; background: var(--accent); color: #0a0a0a; cursor: pointer;
   }
-  button.confirm:hover { background: #d68950; }
+  button.confirm:hover { background: #d8d8d8; }
 
   #stepper {
     position: absolute; bottom: 0; left: 0; right: 0; z-index: 2;
@@ -300,15 +300,25 @@ window.addEventListener('keydown', (e) => {
 });
 
 /* ============================================================
-   6. FONDO DESDE EL SPREADSHEET (misma hoja "Backgroud" que en
-   el editor de curvas — reutiliza el mismo Web App de Apps Script)
+   6. FONDO Y PRECIOS DESDE EL SPREADSHEET
+   Reutiliza el mismo Web App: además del fondo (hoja "Backgroud"),
+   ahora también trae los 4 precios por mm desde la hoja "PRICING"
+   (B1 plata brillante, B2 plata mate, B3 oro brillante, B4 oro mate).
    ============================================================ */
 const BACKGROUND_CONFIG_URL = 'https://script.google.com/macros/s/AKfycbzUR65t2RJ6cuBtM-BxB5bw3loLe9BOZlYnz1FRgChnHtX8BzBR6d5kc4d-hgToGXFH/exec';
 
-async function loadBackgroundConfig() {
+const PRICE_PER_MM = {
+  'plata-brillante': null,
+  'plata-mate': null,
+  'oro-brillante': null,
+  'oro-mate': null,
+};
+
+async function loadBackgroundAndPricing() {
   try {
     const res = await fetch(BACKGROUND_CONFIG_URL);
     const data = await res.json();
+
     if (typeof data.color === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(data.color)) {
       document.documentElement.style.setProperty('--bg', data.color);
     }
@@ -319,24 +329,34 @@ async function loadBackgroundConfig() {
       img.style.width = scale + '%';
       img.style.height = 'auto';
     }
+
+    if (data.pricing) {
+      PRICE_PER_MM['plata-brillante'] = Number(data.pricing.plataBrillante) || null;
+      PRICE_PER_MM['plata-mate'] = Number(data.pricing.plataMate) || null;
+      PRICE_PER_MM['oro-brillante'] = Number(data.pricing.oroBrillante) || null;
+      PRICE_PER_MM['oro-mate'] = Number(data.pricing.oroMate) || null;
+    }
   } catch (err) {
-    console.error('No se pudo cargar el fondo desde el spreadsheet:', err);
+    console.error('No se pudo cargar el fondo/precios desde el spreadsheet:', err);
+  } finally {
+    updatePrice();
   }
 }
-loadBackgroundConfig();
+loadBackgroundAndPricing();
 
 /* ============================================================
    7. COTIZACIÓN Y CONFIRMAR PEDIDO
    ============================================================ */
-const RATE_PER_MM = { plata: 500, oro: 2500 };
-function metalOf(finishKey) { return finishKey.startsWith('oro') ? 'oro' : 'plata'; }
-
 function updatePrice() {
-  const metal = metalOf(currentFinishKey);
-  const price = Math.round(design.totalLengthMm * RATE_PER_MM[metal]);
+  const rate = PRICE_PER_MM[currentFinishKey];
+  if (rate == null) {
+    document.getElementById('price').textContent = 'Calculando…';
+    document.getElementById('priceMeta').textContent = 'Cargando precio desde el spreadsheet';
+    return;
+  }
+  const price = Math.round(design.totalLengthMm * rate);
   document.getElementById('price').textContent = '$' + price.toLocaleString('es-CO');
-  document.getElementById('priceMeta').textContent =
-    `${design.totalLengthMm}mm × $${RATE_PER_MM[metal]} (${metal})`;
+  document.getElementById('priceMeta').textContent = `${design.totalLengthMm}mm × $${rate}`;
 }
 
 document.querySelectorAll('.finish-btn').forEach((btn) => {
@@ -345,11 +365,13 @@ document.querySelectorAll('.finish-btn').forEach((btn) => {
 applyFinish(currentFinishKey);
 
 document.getElementById('btnConfirm').addEventListener('click', () => {
-  const metal = metalOf(currentFinishKey);
+  const rate = PRICE_PER_MM[currentFinishKey];
+  if (rate == null) { alert('El precio todavía se está cargando desde el spreadsheet — espera un momento.'); return; }
   const order = {
     finish: currentFinishKey,
     totalLengthMm: design.totalLengthMm,
-    estimatedPrice: Math.round(design.totalLengthMm * RATE_PER_MM[metal]),
+    pricePerMm: rate,
+    estimatedPrice: Math.round(design.totalLengthMm * rate),
     stemPosition: stemGroup.position.toArray(),
     stemRotation: [stemGroup.rotation.x, stemGroup.rotation.y, stemGroup.rotation.z],
   };
