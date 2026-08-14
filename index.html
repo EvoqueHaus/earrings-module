@@ -224,6 +224,16 @@ function newPath() {
   return p;
 }
 
+/* El área de trabajo es un límite duro: cualquier ancla se recorta
+   al cuadrado de SQUARE_MM x SQUARE_MM. Los manejadores de curva no
+   se recortan (son puntos de control, no parte del contorno visible). */
+function clampToSquare(point) {
+  return new paper.Point(
+    Math.min(SQUARE_MM, Math.max(0, point.x)),
+    Math.min(SQUARE_MM, Math.max(0, point.y))
+  );
+}
+
 /* ============================================================
    HERRAMIENTA DE DIBUJO (tipo pluma: clic = ancla recta,
    clic + arrastrar = ancla con manejadores/curva)
@@ -247,11 +257,12 @@ tool.onMouseDown = (event) => {
 
   if (mode !== 'outer' && mode !== 'hole') return;
 
+  const point = clampToSquare(event.point);
   const activePath = mode === 'outer' ? outerPath : holePath;
 
   if (activePath && activePath.segments.length > 2) {
     const start = activePath.firstSegment.point;
-    if (event.point.getDistance(start) <= CLOSE_THRESHOLD_MM) {
+    if (point.getDistance(start) <= CLOSE_THRESHOLD_MM) {
       closeActivePath();
       return;
     }
@@ -261,8 +272,8 @@ tool.onMouseDown = (event) => {
   if (mode === 'hole' && !holePath) holePath = newPath();
 
   const path = mode === 'outer' ? outerPath : holePath;
-  drawingSegment = path.add(event.point);
-  dragOrigin = event.point;
+  drawingSegment = path.add(point);
+  dragOrigin = point;
 };
 
 tool.onMouseDrag = (event) => {
@@ -271,7 +282,7 @@ tool.onMouseDrag = (event) => {
   if (nodeEditMode) {
     if (!activeNodeHit) return;
     const seg = activeNodeHit.segment;
-    if (activeNodeHit.type === 'segment') seg.point = seg.point.add(event.delta);
+    if (activeNodeHit.type === 'segment') seg.point = clampToSquare(seg.point.add(event.delta));
     else if (activeNodeHit.type === 'handle-in') seg.handleIn = seg.handleIn.add(event.delta);
     else if (activeNodeHit.type === 'handle-out') seg.handleOut = seg.handleOut.add(event.delta);
     return;
@@ -453,10 +464,10 @@ function acceptDesign() {
     totalLengthMm: Number(totalLengthMm.toFixed(3)),
   };
   console.log('Diseño aceptado →', payload);
-  // TODO(paso 3): pasar `payload` al módulo de extrusión 3D
-  // (THREE.Shape + holes + ExtrudeGeometry a 0.8mm de espesor).
+  sessionStorage.setItem('topitos-design', JSON.stringify(payload));
   mode = 'done';
-  readout.textContent = `Longitud total: ${payload.totalLengthMm}mm — listo para extrusión`;
+  readout.textContent = `Longitud total: ${payload.totalLengthMm}mm — abriendo vista 3D…`;
+  window.location.href = 'extrusion.html';
 }
 </script>
 </body>
