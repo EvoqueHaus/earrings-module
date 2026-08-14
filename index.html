@@ -6,13 +6,13 @@
 <title>Topitos — Editor de figura</title>
 <style>
   :root {
-    --bg: #1c1c1e;
-    --panel: #232326;
-    --line: rgba(255,255,255,0.08);
-    --square: #7a7a82;
-    --accent: #c8793f;      /* cobre, tono de metal crudo antes del baño en plata/oro */
-    --text: #eceCEF;
-    --text-dim: #9a9aa0;
+    --bg: #0a0a0a;
+    --panel: #161616;
+    --line: rgba(255,255,255,0.12);
+    --square: #6a6a6a;
+    --accent: #ffffff;
+    --text: #f5f5f5;
+    --text-dim: #8a8a8a;
     --danger: #d16565;
   }
   * { box-sizing: border-box; }
@@ -60,8 +60,8 @@
   }
   button:hover:not(:disabled) { background: rgba(255,255,255,0.06); }
   button:disabled { color: var(--text-dim); cursor: not-allowed; opacity: 0.5; }
-  button.primary { background: var(--accent); color: #1c1c1e; font-weight: 600; }
-  button.primary:hover:not(:disabled) { background: #d68950; }
+  button.primary { background: var(--accent); color: #0a0a0a; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: #d8d8d8; }
   button.danger { color: var(--danger); }
   button.active { border-color: var(--accent); color: var(--accent); }
 
@@ -104,6 +104,21 @@
   #confirmModal h2 { font-size: 15px; margin: 0 0 4px; }
   #confirmModal p { font-size: 12px; color: var(--text-dim); margin: 0 0 18px; }
   #confirmModal .row { display: flex; gap: 8px; justify-content: center; }
+
+  #importScreen {
+    position: absolute; inset: 0; z-index: 5;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #importScreen .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 32px; width: 360px; text-align: center;
+  }
+  #importScreen h2 { font-size: 16px; margin: 0 0 8px; }
+  #importScreen p { font-size: 12px; color: var(--text-dim); margin: 0 0 22px; line-height: 1.5; }
+  #importScreen .row { display: flex; flex-direction: column; gap: 8px; }
+  #importStatus { font-size: 11px; color: var(--text-dim); margin-top: 12px; min-height: 14px; }
+  #importStatus.error { color: var(--danger); }
 </style>
 </head>
 <body>
@@ -129,8 +144,8 @@
   </div>
 
   <div id="stepper">
-    <div class="step"><div class="step-dot"></div><div class="step-label">1 · Importar</div></div>
-    <div class="step active"><div class="step-dot"></div><div class="step-label">2 · Dibujar</div></div>
+    <div class="step active" id="stepImport"><div class="step-dot"></div><div class="step-label">1 · Importar</div></div>
+    <div class="step" id="stepDraw"><div class="step-dot"></div><div class="step-label">2 · Dibujar</div></div>
     <div class="step"><div class="step-dot"></div><div class="step-label">3 · Extrusión 3D</div></div>
   </div>
 
@@ -142,6 +157,19 @@
         <button id="btnConfirmReset" class="danger">Reiniciar</button>
         <button id="btnConfirmAccept" class="primary">Aceptar</button>
       </div>
+    </div>
+  </div>
+
+  <div id="importScreen">
+    <div class="card">
+      <h2>¿Tienes un archivo de tu diseño?</h2>
+      <p>Puedes subir un PDF, SVG o DXF y lo ajustamos al área de trabajo. Si no tienes uno, no hay problema — puedes dibujar tu figura a mano en el siguiente paso.</p>
+      <input type="file" id="fileInput" accept=".svg,.dxf,.pdf" hidden>
+      <div class="row">
+        <button id="btnUpload" class="primary">Subir archivo</button>
+        <button id="btnSkipImport">Continuar sin archivo</button>
+      </div>
+      <div id="importStatus"></div>
     </div>
   </div>
 </div>
@@ -184,7 +212,7 @@ function drawGrid() {
     });
   }
   const border = new paper.Path.Rectangle(new paper.Point(0, 0), new paper.Point(SQUARE_MM, SQUARE_MM));
-  border.strokeColor = '#7a7a82';
+  border.strokeColor = '#6a6a6a';
   border.strokeWidth = 1;
   border.strokeScaling = false;
 }
@@ -468,6 +496,141 @@ function acceptDesign() {
   mode = 'done';
   readout.textContent = `Longitud total: ${payload.totalLengthMm}mm — abriendo vista 3D…`;
   window.location.href = 'extrusion.html';
+}
+
+/* ============================================================
+   ETAPA 1 — IMPORTAR PDF / SVG / DXF (o continuar sin archivo)
+   ============================================================ */
+const importScreen = $('importScreen');
+const importStatus = $('importStatus');
+const fileInput = $('fileInput');
+const stepImport = $('stepImport');
+const stepDraw = $('stepDraw');
+
+function closeImportScreen() {
+  importScreen.style.display = 'none';
+  stepImport.classList.remove('active');
+  stepDraw.classList.add('active');
+}
+
+function setImportStatus(text, isError) {
+  importStatus.textContent = text;
+  importStatus.classList.toggle('error', !!isError);
+}
+
+$('btnUpload').addEventListener('click', () => fileInput.click());
+$('btnSkipImport').addEventListener('click', closeImportScreen);
+
+fileInput.addEventListener('change', async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  setImportStatus('Cargando…', false);
+
+  try {
+    if (ext === 'svg') {
+      importSVGDesign(await file.text());
+    } else if (ext === 'dxf') {
+      await importDXFDesign(await file.text());
+    } else if (ext === 'pdf') {
+      setImportStatus('La importación automática de PDF todavía no está lista. Convierte tu archivo a SVG, o dibuja la figura a mano en el siguiente paso.', true);
+      return;
+    } else {
+      setImportStatus('Formato no reconocido — usa PDF, SVG o DXF.', true);
+      return;
+    }
+    closeImportScreen();
+  } catch (err) {
+    console.error(err);
+    setImportStatus('No se pudo leer el archivo: ' + err.message, true);
+  }
+});
+
+/* Deja el path importado dentro del cuadrado de trabajo, centrado
+   y ocupando ~90% del área, para que quede editable de inmediato. */
+function fitPathToSquare(path, marginRatio = 0.9) {
+  const bounds = path.bounds;
+  const largestSide = Math.max(bounds.width, bounds.height);
+  if (largestSide > 0) {
+    const scale = (SQUARE_MM * marginRatio) / largestSide;
+    path.scale(scale, bounds.center);
+  }
+  path.position = new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2);
+}
+
+/* De un item importado (que puede ser un Group con varios paths),
+   se queda con el path/compound-path de mayor área — asumimos que
+   es el contorno principal de la pieza. */
+function flattenToSinglePath(item) {
+  if (item instanceof paper.Path || item instanceof paper.CompoundPath) return item;
+  if (item.children && item.children.length) {
+    let best = null, bestArea = -1;
+    item.children.forEach((child) => {
+      const candidate = flattenToSinglePath(child);
+      if (candidate) {
+        const area = Math.abs(candidate.area || 0);
+        if (area > bestArea) { bestArea = area; best = candidate; }
+      }
+    });
+    return best;
+  }
+  return null;
+}
+
+function adoptImportedOuter(path) {
+  path.strokeColor = '#eceCEF';
+  path.strokeWidth = 1.5;
+  path.strokeScaling = false;
+  path.fillColor = null;
+  path.closed = true;
+  fitPathToSquare(path);
+  outerPath = path;
+
+  mode = 'review-outer';
+  btnSmooth.disabled = false;
+  btnHole.disabled = false;
+  btnNodeEdit.disabled = false;
+  btnAccept.disabled = false;
+  openConfirm('Figura importada', 'Revisa el trazo — puedes suavizarlo, editar nodos o agregar un agujero antes de aceptar.');
+}
+
+function importSVGDesign(svgText) {
+  const imported = paper.project.importSVG(svgText, { expandShapes: true });
+  const path = flattenToSinglePath(imported);
+  if (!path) throw new Error('el SVG no contiene un trazo utilizable');
+  if (path !== imported) imported.remove();
+  adoptImportedOuter(path);
+}
+
+/* Soporte de DXF: mejor esfuerzo. Convierte LWPOLYLINE/POLYLINE y
+   CIRCLE a un path. Formas más complejas (splines, bloques anidados)
+   pueden no importarse bien — en ese caso, exporta a SVG desde tu
+   software de diseño y usa esa ruta en su lugar. */
+async function importDXFDesign(dxfText) {
+  const { default: DxfParser } = await import('https://esm.sh/dxf-parser@1.1.2');
+  const dxf = new DxfParser().parseSync(dxfText);
+  if (!dxf || !dxf.entities || !dxf.entities.length) {
+    throw new Error('no se encontraron entidades utilizables en el DXF');
+  }
+
+  let best = null, bestArea = -1;
+  dxf.entities.forEach((entity) => {
+    let candidate = null;
+    if ((entity.type === 'LWPOLYLINE' || entity.type === 'POLYLINE') && entity.vertices && entity.vertices.length > 2) {
+      candidate = new paper.Path(entity.vertices.map(v => new paper.Point(v.x, v.y)));
+      candidate.closed = true;
+    } else if (entity.type === 'CIRCLE') {
+      candidate = new paper.Path.Circle(new paper.Point(entity.center.x, entity.center.y), entity.radius);
+    }
+    if (candidate) {
+      const area = Math.abs(candidate.area || 0);
+      if (area > bestArea) { bestArea = area; best = candidate; }
+      else candidate.remove();
+    }
+  });
+
+  if (!best) throw new Error('no se encontró un contorno cerrado utilizable en el DXF');
+  adoptImportedOuter(best);
 }
 </script>
 </body>
