@@ -303,7 +303,7 @@ const MIN_BRIDGE_MM = 1;
 const MIN_ZOOM = 8;
 const MAX_ZOOM = 400;
 
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbx9-WV3BJf3ZPa_9Eciq9i2WqzOOPLjOLCQut9TR15ZHV9NcbdIwOgeixu9OWbreD0M/exec';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxOltGaxVu2MK1XwxrutDhpyBjuUlOliKDv_N7XF5wV6uB6LTUA-Y6x_Lh2IHMPBHHE/exec';
 const DESIGN_KEY = 'topitos-design';
 const TRACE_KEY = 'topitos-trace';
 
@@ -1086,7 +1086,19 @@ function adoptImportedItem(item) {
   enterReviewOuter('Trazo cargado. Suavízalo, edita nodos o agrégale un agujero antes de aceptar.');
 }
 
+/* Un SVG de línea (fill="none" + stroke) no se puede extruir: un trazo sin
+   grosor no genera volumen. Se detecta antes de cargarlo para no dejar al
+   cliente con una pieza vacía en el paso 3. */
+function isStrokeOnlySVG(svgText) {
+  const hasFill = /fill\s*[:=]\s*["']?\s*(?!none)(#|rgb|url|[a-z])/i.test(svgText);
+  const strokeOnly = /fill\s*[:=]\s*["']?\s*none/i.test(svgText) && /stroke\s*[:=]\s*["']?\s*(?!none)/i.test(svgText);
+  return strokeOnly && !hasFill;
+}
+
 function importSVGDesign(svgText) {
+  if (isStrokeOnlySVG(svgText)) {
+    throw new Error('es un dibujo de línea, no una silueta rellena. Para poder extruirlo necesita ser una forma cerrada con relleno.');
+  }
   const imported = paper.project.importSVG(svgText, { expandShapes: true });
   if (!imported) throw new Error('el SVG no se pudo interpretar');
   const path = flattenToSinglePath(imported);
@@ -1184,31 +1196,20 @@ async function fetchMotifSVG(url) {
     if (cached) return cached;
   } catch (e) {}
 
-  let svg = null;
-  let directError = null;
-
-  // 1) Directo desde el CDN. Cloudinary manda cabeceras CORS, así que el
-  //    navegador puede bajar el SVG sin pasar por el Web App.
+  /* Los motivos se bajan directo del CDN. Cloudinary manda cabeceras CORS, así
+     que el navegador puede leerlos sin intermediarios. Un origen que no las
+     mande (Drive, por ejemplo) va a fallar aquí: la biblioteca necesita estar
+     alojada en un CDN con CORS. */
+  let res;
   try {
-    const res = await fetch(url, { mode: 'cors' });
-    if (!res.ok) throw new Error('el CDN respondió ' + res.status);
-    const text = await res.text();
-    if (text.indexOf('<svg') === -1) throw new Error('el archivo no es un SVG');
-    svg = text;
+    res = await fetch(url, { mode: 'cors' });
   } catch (err) {
-    directError = err;
+    throw new Error('el origen del motivo no permite descargas desde el navegador (falta CORS). Alójalo en Cloudinary.');
   }
+  if (!res.ok) throw new Error('el CDN respondió ' + res.status);
 
-  // 2) Proxy del Web App. Solo se usa para orígenes sin CORS (por ejemplo
-  //    archivos alojados en Drive); requiere el permiso de red del script.
-  if (!svg) {
-    const res = await fetch(CONFIG_URL + '?svg=' + encodeURIComponent(url));
-    const data = await res.json();
-    if (!data.ok) {
-      throw new Error(data.error || (directError && directError.message) || 'no se pudo descargar el motivo');
-    }
-    svg = data.svg;
-  }
+  const svg = await res.text();
+  if (svg.indexOf('<svg') === -1) throw new Error('el archivo no es un SVG');
 
   try { localStorage.setItem(cacheKey, svg); } catch (e) { /* cuota llena: sigue sin caché */ }
   return svg;
