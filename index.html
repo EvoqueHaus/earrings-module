@@ -3,15 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Topitos — Extrusión 3D</title>
+<title>Topitos — Editor de figura</title>
 <style>
   :root {
     --bg: #0a0a0a;
     --panel: #161616;
     --line: rgba(255,255,255,0.12);
+    --square: #6a6a6a;
     --accent: #ffffff;
     --text: #f5f5f5;
     --text-dim: #8a8a8a;
+    --danger: #d16565;
   }
   * { box-sizing: border-box; }
   html, body {
@@ -21,90 +23,72 @@
     -webkit-tap-highlight-color: transparent;
   }
   #app { position: relative; width: 100%; height: 100%; overflow: hidden; }
-  canvas { position: absolute; top: 0; left: 0; z-index: 1; display: block; touch-action: none; }
-  #bgImage {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    z-index: 0; pointer-events: none; max-width: none;
+  canvas {
+    position: absolute; top: 0; left: 0; z-index: 1;
+    display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair;
+  }
+
+  /* ---------- PRELUDE ---------- */
+  #prelude {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg);
+    transition: opacity 3s ease;
+  }
+  #prelude.fading { opacity: 0; pointer-events: none; }
+  #preludeLogo {
+    max-width: 90%; max-height: 90%; object-fit: contain;
+    opacity: 0; transition: opacity .4s ease;
+  }
+  #preludeLogo.show { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) {
+    #prelude, #preludeLogo { transition-duration: .01ms; }
   }
 
   #topbar {
     position: absolute; top: 0; left: 0; right: 0; z-index: 2;
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    display: flex; align-items: center; justify-content: space-between;
     padding: 14px 20px;
     background: linear-gradient(to bottom, rgba(28,28,30,0.9), transparent);
+    pointer-events: none;
   }
   #topbar h1 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
-  #topbar a { color: var(--text-dim); font-size: 12px; text-decoration: none; white-space: nowrap; }
-  #topbar a:hover { color: var(--text); }
-  #hint {
+  #hint { font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; color: var(--text-dim); }
+  #readout {
     position: absolute; top: 46px; left: 20px; z-index: 2;
-    font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; color: var(--text-dim);
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 12px; color: var(--text-dim);
+    pointer-events: none;
   }
 
-  /* ---------- PANEL ---------- */
-  #panelWrap {
-    position: absolute; top: 56px; right: 16px; z-index: 4;
-    display: flex; align-items: flex-start; gap: 8px;
-    transition: transform .25s ease;
-  }
-  #panelWrap.collapsed { transform: translateX(calc(100% - 38px)); }
-  @media (prefers-reduced-motion: reduce) { #panelWrap { transition: none; } }
-
-  #panelToggle {
-    width: 30px; height: 30px; flex: none; padding: 0;
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(35,35,38,0.9); border: 1px solid var(--line);
-    border-radius: 8px; color: var(--text); font-size: 15px; line-height: 1; cursor: pointer;
-    backdrop-filter: blur(6px);
-  }
-  #panelToggle:hover { background: rgba(255,255,255,0.1); }
-
-  #rightPanel {
-    width: 224px;
-    background: rgba(35,35,38,0.85);
+  #actionbar {
+    position: absolute; bottom: 56px; left: 50%; transform: translateX(-50%); z-index: 3;
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+    max-width: calc(100% - 24px);
+    background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 14px;
-    backdrop-filter: blur(6px);
-    max-height: calc(100vh - 130px);
-    overflow-y: auto;
+    border-radius: 10px;
+    padding: 8px;
   }
-  #rightPanel h2 {
-    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
-    color: var(--text-dim); margin: 0 0 8px;
+  button {
+    font-family: inherit; font-size: 13px; font-weight: 500;
+    background: transparent; color: var(--text);
+    border: 1px solid transparent; border-radius: 7px;
+    padding: 8px 14px; cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
   }
-  #rightPanel h2 + h2, .block + .block { margin-top: 16px; }
-  .block { margin-bottom: 0; }
-  .sublabel { display: block; font-size: 9px; letter-spacing: 0.08em; color: var(--text-dim); text-transform: none; margin-top: 2px; }
-
-  .finishes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-  .finish-btn {
-    font-family: inherit; font-size: 11px; padding: 8px 6px; border-radius: 7px;
-    border: 1px solid var(--line); background: rgba(255,255,255,0.03); color: var(--text);
-    cursor: pointer; text-align: center;
-  }
-  .finish-btn.active { border-color: var(--accent); color: var(--accent); }
-
-  .panel-btn {
-    width: 100%; font-family: inherit; font-size: 12px; padding: 9px; border-radius: 7px;
-    border: 1px solid var(--line); background: rgba(255,255,255,0.03); color: var(--text);
-    cursor: pointer; text-align: center;
-  }
-  .panel-btn.active { border-color: var(--accent); color: var(--accent); }
-  .panel-btn .sublabel { display: block; }
-  .panel-btn + .panel-btn { margin-top: 6px; }
-
-  .slider-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
-  input[type=range] { width: 100%; accent-color: var(--accent); }
-
-  #price { font-size: 20px; font-weight: 600; margin: 2px 0 2px; }
-  #priceMeta { font-size: 11px; color: var(--text-dim); margin-bottom: 12px; line-height: 1.45; }
-  button.confirm {
-    width: 100%; font-family: inherit; font-size: 13px; font-weight: 600; padding: 10px;
-    border-radius: 7px; border: none; background: var(--accent); color: #0a0a0a; cursor: pointer;
-  }
-  button.confirm:hover { background: #d8d8d8; }
+  button:hover:not(:disabled) { background: rgba(255,255,255,0.06); }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button:disabled { color: var(--text-dim); cursor: not-allowed; opacity: 0.5; }
+  button.primary { background: var(--accent); color: #0a0a0a; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: #d8d8d8; }
+  button.danger { color: var(--danger); }
+  button.active { border-color: var(--accent); color: var(--accent); }
+
+  #bgImage {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 0; pointer-events: none; max-width: none;
+  }
 
   #stepper {
     position: absolute; bottom: 0; left: 0; right: 0; z-index: 2;
@@ -119,519 +103,300 @@
   .step.active .step-dot { background: var(--accent); }
   .step-label { font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; }
 
-  /* ---------- PEDIDO ---------- */
-  #orderModal {
+  #warning {
+    position: absolute; top: 46px; left: 50%; transform: translateX(-50%); z-index: 2;
+    background: rgba(209,101,101,0.15);
+    border: 1px solid var(--danger);
+    color: #f0b8b8;
+    font-size: 12px; text-align: center;
+    padding: 8px 14px; border-radius: 8px;
+    max-width: calc(100% - 32px);
+    display: none;
+  }
+
+  /* ---------- PANTALLA DE INICIO ---------- */
+  #importScreen {
     position: absolute; inset: 0; z-index: 10;
-    background: rgba(0,0,0,0.6);
-    display: none; align-items: center; justify-content: center;
-    padding: 24px;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
   }
-  #orderModal .card {
+  #importScreen .card {
     background: var(--panel); border: 1px solid var(--line);
-    border-radius: 14px; padding: 26px 28px; width: 360px; max-width: 100%;
-    max-height: 88vh; overflow-y: auto;
+    border-radius: 14px; padding: 32px; width: 380px; max-width: 100%; text-align: center;
   }
-  #orderModal h2 { font-size: 16px; margin: 0 0 4px; }
-  #orderModal .subtitle { font-size: 12px; color: var(--text-dim); margin: 0 0 18px; }
-  #orderModal label {
-    display: block; font-size: 11px; color: var(--text-dim);
-    text-transform: uppercase; letter-spacing: 0.03em; margin: 14px 0 6px;
-  }
-  #orderModal input, #orderModal select {
-    width: 100%; font-family: inherit; font-size: 13px;
-    background: rgba(255,255,255,0.04); color: var(--text);
-    border: 1px solid var(--line); border-radius: 7px; padding: 9px 10px;
-  }
-  #orderModal input:focus, #orderModal select:focus { outline: 1px solid var(--accent); }
-  .whatsapp-row { display: grid; grid-template-columns: 130px 1fr; gap: 8px; }
-  .whatsapp-row label { grid-column: 1 / -1; }
+  #importScreen h2 { font-size: 16px; margin: 0 0 8px; }
+  #importScreen p { font-size: 12px; color: var(--text-dim); margin: 0 0 22px; line-height: 1.5; }
+  #importScreen .row { display: flex; flex-direction: column; gap: 8px; }
+  #importStatus { font-size: 11px; color: var(--text-dim); margin-top: 12px; min-height: 14px; }
+  #importStatus.error { color: var(--danger); }
 
-  #qrBlock {
-    margin-top: 18px; padding: 14px; border-radius: 10px;
-    background: rgba(255,255,255,0.03); border: 1px solid var(--line);
-    text-align: center;
+  /* ---------- BIBLIOTECA DE MOTIVOS ---------- */
+  #catalogScreen {
+    position: absolute; inset: 0; z-index: 11;
+    background: rgba(0,0,0,0.72);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px;
   }
-  #qrBlock img {
-    width: 100%; max-width: 240px; aspect-ratio: 1 / 1; object-fit: contain;
-    background: #fff; border-radius: 8px; padding: 10px;
+  #catalogScreen .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 22px; width: 560px; max-width: 100%;
+    max-height: 86vh; display: flex; flex-direction: column;
   }
-  #qrBlock p { font-size: 12px; color: var(--text-dim); margin: 10px 0 0; line-height: 1.5; }
-  #btnQrDownload {
-    margin-top: 10px; width: 100%; font-family: inherit; font-size: 12px; padding: 9px;
-    border-radius: 7px; border: 1px solid var(--line);
-    background: rgba(255,255,255,0.04); color: var(--text); cursor: pointer;
+  #catalogScreen h2 { font-size: 16px; margin: 0 0 4px; }
+  #catalogScreen .subtitle { font-size: 12px; color: var(--text-dim); margin: 0 0 16px; }
+  #catalogGrid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 10px; overflow-y: auto; padding: 2px;
   }
-  #btnQrDownload:hover { background: rgba(255,255,255,0.1); }
+  .motif {
+    border: 1px solid var(--line); border-radius: 10px; padding: 8px;
+    background: rgba(255,255,255,0.03); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    aspect-ratio: 1 / 1;
+  }
+  .motif:hover, .motif:focus-visible { border-color: var(--accent); }
+  .motif img { width: 100%; height: 100%; object-fit: contain; }
+  #catalogStatus { font-size: 12px; color: var(--text-dim); min-height: 16px; margin-top: 12px; }
+  #catalogStatus.error { color: var(--danger); }
+  #catalogScreen .row { display: flex; justify-content: flex-end; margin-top: 12px; }
 
-  #orderStatus { font-size: 12px; color: var(--text-dim); margin-top: 14px; min-height: 14px; }
-  #orderStatus.error { color: #e08a8a; }
-  #orderStatus.success { color: #8fd19e; }
-  #orderModal .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
-  #orderModal .row button { font-family: inherit; font-size: 13px; padding: 10px 16px; border-radius: 7px; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; }
+  /* ---------- PANEL DE CALCO ---------- */
+  #tracePanel {
+    position: absolute; top: 56px; right: 16px; z-index: 3;
+    width: 210px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px;
+    display: none;
+  }
+  #tracePanel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 8px; }
+  .ref-hint { font-size: 11px; color: var(--text-dim); line-height: 1.4; margin-bottom: 10px; }
+  .slider-label {
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: var(--text-dim); margin: 10px 0 4px;
+  }
+  #tracePanel input[type=range] { width: 100%; accent-color: var(--accent); }
+  #tracePanel input[type=range]:disabled { opacity: .4; }
+  .ref-row { display: flex; gap: 6px; margin-top: 12px; }
+  .ref-row button { flex: 1; font-size: 12px; padding: 8px 6px; }
 
+  /* ---------- MÓVIL ---------- */
   @media (max-width: 720px) {
     #topbar { padding: 10px 14px; }
     #topbar h1 { font-size: 13px; }
     #hint { display: none; }
-    #panelWrap { top: 50px; right: 12px; max-width: calc(100% - 24px); }
-    #rightPanel { width: min(240px, calc(100vw - 62px)); max-height: calc(100vh - 150px); }
+    #readout { top: 40px; left: 14px; font-size: 11px; }
+    #actionbar { bottom: 52px; padding: 6px; gap: 6px; border-radius: 12px; }
+    #actionbar button { font-size: 12px; padding: 8px 10px; }
     #stepper { gap: 14px; padding: 12px 0; }
     .step-label { font-size: 10px; }
+    #tracePanel { top: auto; bottom: 150px; right: 12px; left: 12px; width: auto; }
   }
 </style>
 </head>
 <body>
 
+<div id="prelude"><img id="preludeLogo" alt=""></div>
+<script>
+  /* El prelude se muestra una sola vez por sesión. Si el usuario ya lo vio
+     (por ejemplo al volver desde la vista 3D), se retira antes del primer
+     pintado para que no haya parpadeo. */
+  (function () {
+    var seen = false;
+    try { seen = sessionStorage.getItem('topitos-prelude-shown') === '1'; } catch (e) {}
+    if (seen) {
+      document.getElementById('prelude').style.display = 'none';
+    } else {
+      try { sessionStorage.setItem('topitos-prelude-shown', '1'); } catch (e) {}
+    }
+    window.__preludeSeen = seen;
+  })();
+</script>
+
 <div id="app">
   <img id="bgImage" alt="">
-  <canvas id="canvas"></canvas>
+  <canvas id="canvas" resize></canvas>
 
   <div id="topbar">
-    <h1>Topitos — vista 3D</h1>
-    <a href="index.html" id="backLink">← volver a editar el diseño</a>
+    <h1>Topitos — dibuja tu figura</h1>
+    <div id="hint">rueda: zoom · clic derecho sostenido: paneo</div>
   </div>
-  <div id="hint">arrastrar: orbitar · rueda: zoom · W/E: mover/rotar el vástago</div>
 
-  <div id="panelWrap">
-    <button id="panelToggle" type="button" aria-label="Ocultar panel" aria-expanded="true">›</button>
-    <div id="rightPanel">
-      <div class="block">
-        <h2>Acabado</h2>
-        <div class="finishes">
-          <button class="finish-btn" data-finish="plata-mate">Plata mate</button>
-          <button class="finish-btn" data-finish="plata-brillante">Plata brillante</button>
-          <button class="finish-btn" data-finish="oro-mate">Oro mate</button>
-          <button class="finish-btn" data-finish="oro-brillante">Oro brillante</button>
-        </div>
-      </div>
+  <div id="readout"></div>
+  <div id="warning">El puente entre el agujero y el borde es menor a 1&nbsp;mm — ajusta el agujero para continuar.</div>
 
-      <div class="block">
-        <h2>Simetría</h2>
-        <button id="btnFlip" class="panel-btn" type="button">Voltear el par</button>
-      </div>
+  <div id="tracePanel">
+    <h2>Imagen de calco</h2>
+    <div class="ref-hint" id="traceHint">Arrastra la imagen para moverla. Ajústala y bloquéala para dibujar encima.</div>
 
-      <div class="block">
-        <h2>Rotación <span class="sublabel">sobre el eje del vástago</span></h2>
-        <div class="slider-label"><span>Ángulo</span><span id="rotValue">0°</span></div>
-        <input id="rotSlider" type="range" min="0" max="360" step="1" value="0">
-      </div>
+    <div class="slider-label"><span>Opacidad</span><span id="traceOpacityVal">35%</span></div>
+    <input id="traceOpacity" type="range" min="10" max="80" value="35">
 
-      <div class="block">
-        <h2>Vástago</h2>
-        <button id="btnStemToggle" class="panel-btn" type="button">
-          Control de Movimiento
-          <span class="sublabel">Gumball</span>
-        </button>
-      </div>
+    <div class="slider-label"><span>Escala</span><span id="traceScaleVal">100%</span></div>
+    <input id="traceScale" type="range" min="20" max="400" value="100">
 
-      <div class="block">
-        <h2>Valor estimado</h2>
-        <div id="price">$0</div>
-        <div id="priceMeta"></div>
-        <button id="btnConfirm" class="confirm" type="button">Confirmar pedido</button>
-      </div>
+    <div class="slider-label"><span>Rotación</span><span id="traceRotVal">0°</span></div>
+    <input id="traceRot" type="range" min="-180" max="180" value="0">
+
+    <div class="ref-row">
+      <button id="btnTraceLock" class="primary">Bloquear</button>
+      <button id="btnTraceRemove" class="danger">Quitar</button>
     </div>
   </div>
 
-  <div id="stepper">
-    <div class="step"><div class="step-dot"></div><div class="step-label">1 · Importar</div></div>
-    <div class="step"><div class="step-dot"></div><div class="step-label">2 · Dibujar</div></div>
-    <div class="step active"><div class="step-dot"></div><div class="step-label">3 · Extrusión 3D</div></div>
+  <div id="actionbar">
+    <button id="btnTrace">Calcar imagen</button>
+    <button id="btnSmooth" disabled>Suavizar trazo</button>
+    <button id="btnHole" disabled>Agregar agujero interno</button>
+    <button id="btnNodeEdit" disabled>Editar nodos</button>
+    <button id="btnReset" class="danger">Reiniciar</button>
+    <button id="btnAccept" class="primary" disabled>Aceptar diseño</button>
   </div>
 
-  <div id="orderModal">
+  <div id="stepper">
+    <div class="step active" id="stepImport"><div class="step-dot"></div><div class="step-label">1 · Importar</div></div>
+    <div class="step" id="stepDraw"><div class="step-dot"></div><div class="step-label">2 · Dibujar</div></div>
+    <div class="step"><div class="step-dot"></div><div class="step-label">3 · Extrusión 3D</div></div>
+  </div>
+
+  <div id="importScreen">
     <div class="card">
-      <h2>Confirmar pedido</h2>
-      <p class="subtitle">Completa tus datos, realiza el pago y sube el comprobante.</p>
-      <form id="orderForm">
-        <label for="ofName">Nombre completo</label>
-        <input id="ofName" type="text" autocomplete="given-name" required>
+      <h2>¿Cómo quieres empezar?</h2>
+      <p>Sube un archivo de tu diseño, elige un motivo de la biblioteca, o dibuja tu figura a mano en el siguiente paso.</p>
+      <input type="file" id="fileInput" accept=".svg,.dxf,.pdf" hidden>
+      <div class="row">
+        <button id="btnUpload" class="primary">Subir archivo</button>
+        <button id="btnCatalog">Elegir un motivo</button>
+        <button id="btnSkipImport">Dibujar a mano</button>
+      </div>
+      <div id="importStatus"></div>
+    </div>
+  </div>
 
-        <label for="ofLastName">Apellidos completos</label>
-        <input id="ofLastName" type="text" autocomplete="family-name" required>
-
-        <label for="ofEmail">Correo electrónico</label>
-        <input id="ofEmail" type="email" autocomplete="email" required>
-
-        <div class="whatsapp-row">
-          <label for="ofWhatsapp">WhatsApp</label>
-          <select id="ofCountryCode" aria-label="Indicativo del país"></select>
-          <input id="ofWhatsapp" type="tel" inputmode="tel" placeholder="Número" required>
-        </div>
-
-        <div id="qrBlock">
-          <img id="qrImage" alt="Código QR de pago">
-          <p>Escanea este código QR para realizar el pago. Cuando lo hayas hecho, sube el comprobante en el siguiente campo.</p>
-          <button type="button" id="btnQrDownload">Descargar el código QR</button>
-        </div>
-
-        <label for="ofReceipt">Comprobante de pago</label>
-        <input id="ofReceipt" type="file" accept="image/*" required>
-
-        <div id="orderStatus"></div>
-        <div class="row">
-          <button type="button" id="btnOrderCancel">Cancelar</button>
-          <button type="submit" id="btnOrderSubmit" class="confirm" style="width:auto; padding:10px 18px;">Enviar</button>
-        </div>
-      </form>
+  <div id="catalogScreen">
+    <div class="card">
+      <h2>Biblioteca de motivos</h2>
+      <p class="subtitle">Elige un motivo. Podrás editar sus nodos, suavizarlo o agregarle un agujero antes de aceptar.</p>
+      <div id="catalogGrid"></div>
+      <div id="catalogStatus">Cargando motivos…</div>
+      <div class="row"><button id="btnCatalogClose">Cerrar</button></div>
     </div>
   </div>
 </div>
 
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://unpkg.com/three@0.166.0/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.166.0/examples/jsm/"
-  }
-}
-</script>
-<script type="module">
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+<input type="file" id="traceInput" accept="image/*" hidden>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-full.min.js"></script>
+<script>
 /* ============================================================
-   1. DISEÑO — llega desde el editor (paso 2) vía sessionStorage.
-   El editor guarda además la geometría por segmentos, así que
-   volver atrás con "volver a editar el diseño" no pierde nada.
+   CONFIGURACIÓN — todas las unidades de "paper" son mm reales,
+   así que cualquier distancia en project-space ya está en mm,
+   sin importar el nivel de zoom. Esto es lo que permite que el
+   usuario se acerque a detallar sin romper la validación de
+   cierre (0.2mm) o de puentes (1mm).
    ============================================================ */
-const DESIGN_KEY = 'topitos-design';
-const VIEW_KEY = 'topitos-3d';
+const SQUARE_MM = 10;
+const CLOSE_THRESHOLD_MM = 0.2;
+const MIN_BRIDGE_MM = 1;
+const MIN_ZOOM = 8;
+const MAX_ZOOM = 400;
+
 const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxArX20K1WkToJ_TIqyaV9A4EtZFnU03tgeQ6syyZJJvEmoC6cQ0vUsp-hHnvy2YsGf/exec';
+const DESIGN_KEY = 'topitos-design';
+const TRACE_KEY = 'topitos-trace';
 
-const PIECE_DEPTH_MM = 0.8;
-const STEM_LENGTH_MM = 10;
-const UNITS_PER_PAIR = 2; // un pedido son siempre dos aretes
+paper.setup('canvas');
 
-let design = null;
-try {
-  const raw = sessionStorage.getItem(DESIGN_KEY);
-  if (raw) design = JSON.parse(raw);
-} catch (err) { console.warn('No se pudo leer el diseño guardado:', err); }
-
-if (!design || !design.outerSVG) {
-  console.warn('No hay diseño en sessionStorage — se usa una figura de muestra.');
-  design = {
-    outerSVG: 'M5,1 C7,1 9,3 9,5 C9,7 7,9 5,9 C3,9 1,7 1,5 C1,3 3,1 5,1 Z',
-    holeSVG: 'M5,3.3 C6,3.3 6.7,4 6.7,5 C6.7,6 6,6.7 5,6.7 C4,6.7 3.3,6 3.3,5 C3.3,4 4,3.3 5,3.3 Z',
-    totalLengthMm: 30,
-  };
+/* El encuadre inicial se calcula una sola vez. Antes se recalculaba en cada
+   "resize", lo que en móvil borraba el zoom del usuario cada vez que aparecía
+   el teclado o cambiaba la orientación. El atributo resize del canvas ya
+   mantiene la vista correcta al cambiar de tamaño. */
+function fitView() {
+  const targetPx = paper.view.viewSize.height * 0.7;
+  paper.view.zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, targetPx / SQUARE_MM));
+  paper.view.center = new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2);
 }
+fitView();
 
-/* Estado de la vista, para que volver al 2D y regresar no reinicie nada. */
-let viewState = { finish: 'plata-brillante', rotationDeg: 0, flip: 1, stem: null };
-try {
-  const raw = sessionStorage.getItem(VIEW_KEY);
-  if (raw) viewState = Object.assign(viewState, JSON.parse(raw));
-} catch (err) { /* estado por defecto */ }
-
-function saveViewState() {
-  viewState.finish = currentFinishKey;
-  viewState.rotationDeg = rotationDeg;
-  viewState.flip = flip;
-  viewState.stem = { x: stemPos.x, y: stemPos.y, z: stemPos.z };
-  viewState.anchor = { x: pieceAnchor.x, y: pieceAnchor.y, z: pieceAnchor.z };
-  try { sessionStorage.setItem(VIEW_KEY, JSON.stringify(viewState)); } catch (e) {}
-}
-window.addEventListener('pagehide', saveViewState);
-document.getElementById('backLink').addEventListener('click', saveViewState);
-
-/* ============================================================
-   2. ESCENA
-   ============================================================ */
-const canvas = document.getElementById('canvas');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-// Tope de 2: en pantallas de 3x el coste de sombreado se triplica sin ganancia visible.
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(0x000000, 0); // transparente — el fondo real lo pone #bgImage detrás
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-
-const scene = new THREE.Scene();
-scene.background = null;
-
-const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.035).texture;
-
-const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 400);
-camera.position.set(10, 9, 22);
-
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.target.set(0, 0, 0);
-
-const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
-keyLight.position.set(5, 8, 6);
-scene.add(keyLight);
-scene.add(new THREE.AmbientLight(0xffffff, 0.25));
-
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
-/* ============================================================
-   3. ACABADOS — 4 combinaciones plata/oro × mate/brillante,
-   compartidas por la pieza, el vástago y el clutch.
-   DoubleSide es necesario porque el arete derecho es un espejo
-   (escala negativa en X), lo que invierte el orden de las caras.
-   ============================================================ */
-const FINISHES = {
-  'plata-mate':      { color: 0xc7c9cc, roughness: 0.55 },
-  'plata-brillante': { color: 0xd9dbdd, roughness: 0.08 },
-  'oro-mate':        { color: 0xcda158, roughness: 0.55 },
-  'oro-brillante':   { color: 0xe6b76b, roughness: 0.08 },
-};
-let currentFinishKey = FINISHES[viewState.finish] ? viewState.finish : 'plata-brillante';
-
-const material = new THREE.MeshPhysicalMaterial({
-  color: FINISHES[currentFinishKey].color,
-  metalness: 1,
-  roughness: FINISHES[currentFinishKey].roughness,
-  clearcoat: 0.15,
-  side: THREE.DoubleSide,
-});
-
-function applyFinish(key) {
-  if (!FINISHES[key]) return;
-  currentFinishKey = key;
-  material.color.setHex(FINISHES[key].color);
-  material.roughness = FINISHES[key].roughness;
-  material.needsUpdate = true;
-  document.querySelectorAll('.finish-btn').forEach(b => b.classList.toggle('active', b.dataset.finish === key));
-  updatePrice();
-}
-
-/* ============================================================
-   4. GEOMETRÍA DE LA PIEZA (0.8mm, con el agujero si existe)
-   El centrado se hace sobre el conjunto, no geometría por
-   geometría: si el SVG produce varias formas, centrarlas una a
-   una las desalinea entre sí.
-   ============================================================ */
-function buildPieceGeometries() {
-  const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg">
-    <path d="${design.outerSVG} ${design.holeSVG || ''}" fill-rule="evenodd"/>
-  </svg>`;
-  const parsed = new SVGLoader().parse(svgMarkup);
-
-  const geometries = [];
-  parsed.paths.forEach((path) => {
-    SVGLoader.createShapes(path).forEach((shape) => {
-      const geometry = new THREE.ExtrudeGeometry(shape, {
-        depth: PIECE_DEPTH_MM,
-        bevelEnabled: true,
-        bevelThickness: 0.05,
-        bevelSize: 0.05,
-        bevelSegments: 2,
-        curveSegments: 32,
-      });
-      geometry.rotateX(Math.PI); // el SVG queda con la Y invertida respecto a Three
-      geometries.push(geometry);
+const gridLayer = new paper.Layer();
+function drawGrid() {
+  gridLayer.activate();
+  gridLayer.removeChildren();
+  for (let i = 0; i <= SQUARE_MM; i++) {
+    const v = new paper.Path.Line(new paper.Point(i, 0), new paper.Point(i, SQUARE_MM));
+    const h = new paper.Path.Line(new paper.Point(0, i), new paper.Point(SQUARE_MM, i));
+    [v, h].forEach(l => {
+      l.strokeColor = 'rgba(255,255,255,0.06)';
+      l.strokeWidth = 1;
+      l.strokeScaling = false;
     });
-  });
-
-  const box = new THREE.Box3();
-  geometries.forEach((g) => { g.computeBoundingBox(); box.union(g.boundingBox); });
-  const center = box.getCenter(new THREE.Vector3());
-  geometries.forEach((g) => g.translate(-center.x, -center.y, -center.z));
-
-  return { geometries, size: box.getSize(new THREE.Vector3()) };
+  }
+  const border = new paper.Path.Rectangle(new paper.Point(0, 0), new paper.Point(SQUARE_MM, SQUARE_MM));
+  border.strokeColor = '#6a6a6a';
+  border.strokeWidth = 1;
+  border.strokeScaling = false;
 }
+drawGrid();
 
-const { geometries: pieceGeometries, size: pieceSize } = buildPieceGeometries();
+/* La capa de calco va entre la grilla y el dibujo: la imagen tapa la grilla
+   pero nunca las líneas que el cliente está trazando. */
+const traceLayer = new paper.Layer();
+const drawLayer = new paper.Layer();
+drawLayer.activate();
 
 /* ============================================================
-   5. EL PAR — dos aretes espejados. Cada uno lleva su propio
-   vástago y clutch; el Control de Movimiento mueve el del arete
-   izquierdo y el derecho replica el movimiento en espejo.
+   ESTADO
    ============================================================ */
-const rodGeometry = new THREE.CylinderGeometry(0.4, 0.4, STEM_LENGTH_MM, 20);
-const clutchDiscGeometry = new THREE.CylinderGeometry(0.9, 0.9, 0.35, 20);
-const clutchRingGeometry = new THREE.TorusGeometry(0.55, 0.14, 10, 24);
+let outerPath = null;
+let holePath = null;
+let mode = 'outer';       // 'outer' | 'hole' | 'review-outer' | 'review-hole'
+let drawingSegment = null;
+let dragOrigin = null;
+let isPanning = false;
+let nodeEditMode = false;
+let activeNodeHit = null;
+let bridgeOk = true;
 
-function buildEarring() {
-  const group = new THREE.Group();
+let traceRaster = null;
+let traceLocked = false;
+let traceState = { x: SQUARE_MM / 2, y: SQUARE_MM / 2, scale: 1, rotation: 0, opacity: 0.35 };
+let traceSrc = null;
 
-  /* La figura cuelga de un pivote situado en el vástago. Así el giro ocurre
-     alrededor del eje del poste (que es lo que queda fijo en la oreja) y no
-     alrededor del centro de la figura. */
-  const pivot = new THREE.Group();
-  const pieceHolder = new THREE.Group();
-  pieceGeometries.forEach(g => pieceHolder.add(new THREE.Mesh(g, material)));
-  pivot.add(pieceHolder);
-  group.add(pivot);
+const $ = id => document.getElementById(id);
+const readout = $('readout');
+const warning = $('warning');
+const btnTrace = $('btnTrace');
+const btnSmooth = $('btnSmooth');
+const btnHole = $('btnHole');
+const btnNodeEdit = $('btnNodeEdit');
+const btnAccept = $('btnAccept');
+const btnReset = $('btnReset');
+const bgImage = $('bgImage');
+const tracePanel = $('tracePanel');
 
-  const stem = new THREE.Group();
-
-  const rod = new THREE.Mesh(rodGeometry, material);
-  rod.rotation.x = Math.PI / 2;          // el vástago sale hacia +Z
-  rod.position.z = STEM_LENGTH_MM / 2;
-  stem.add(rod);
-
-  const clutch = new THREE.Group();
-  clutch.position.z = STEM_LENGTH_MM;    // siempre fijo en la punta
-  const disc = new THREE.Mesh(clutchDiscGeometry, material);
-  disc.rotation.x = Math.PI / 2;
-  clutch.add(disc, new THREE.Mesh(clutchRingGeometry, material));
-  stem.add(clutch);
-
-  group.add(stem);
-  return { group, pivot, pieceHolder, stem };
+function newPath() {
+  const p = new paper.Path();
+  p.strokeColor = '#ececef';
+  p.strokeWidth = 1.5;
+  p.strokeScaling = false;
+  p.fillColor = null;
+  return p;
 }
 
-const spacing = Math.max(pieceSize.x, 4) * 0.75;
-
-const holderA = new THREE.Group(); holderA.position.x = -spacing;
-const holderB = new THREE.Group(); holderB.position.x = spacing;
-scene.add(holderA, holderB);
-
-const A = buildEarring();
-const B = buildEarring();
-holderA.add(A.group);
-holderB.add(B.group);
-const stemA = A.stem;
-
-/* ---------- Estado compartido por los dos aretes ----------
-   stemPos/stemQuat: dónde está y cómo está inclinado el poste.
-   pieceAnchor:      posición de la figura sin rotar.
-   theta:            giro de la figura alrededor del eje del poste. */
-const stemPos = new THREE.Vector3(0, 0, PIECE_DEPTH_MM / 2);
-const stemQuat = new THREE.Quaternion();
-const pieceAnchor = new THREE.Vector3(0, 0, 0);
-let theta = THREE.MathUtils.degToRad(Number(viewState.rotationDeg) || 0);
-const pivotQuat = new THREE.Quaternion();
-
-if (viewState.stem) stemPos.set(viewState.stem.x, viewState.stem.y, viewState.stem.z);
-if (viewState.anchor) pieceAnchor.set(viewState.anchor.x, viewState.anchor.y, viewState.anchor.z);
-
-/* El eje de giro es el del vástago: su +Z local, ya inclinado si el cliente
-   movió el poste con el Control de Movimiento. */
-function stemAxis() {
-  return new THREE.Vector3(0, 0, 1).applyQuaternion(stemQuat).normalize();
+/* El área de trabajo es un límite duro: cualquier ancla se recorta
+   al cuadrado de SQUARE_MM x SQUARE_MM. Los manejadores de curva no
+   se recortan (son puntos de control, no parte del contorno visible). */
+function clampToSquare(point) {
+  return new paper.Point(
+    Math.min(SQUARE_MM, Math.max(0, point.x)),
+    Math.min(SQUARE_MM, Math.max(0, point.y))
+  );
 }
 
-function pieceWorldPosition() {
-  return stemPos.clone().add(pieceAnchor.clone().sub(stemPos).applyQuaternion(pivotQuat));
-}
-
-function applyState() {
-  pivotQuat.setFromAxisAngle(stemAxis(), theta);
-  [A, B].forEach((E) => {
-    E.stem.position.copy(stemPos);
-    E.stem.quaternion.copy(stemQuat);
-    E.pivot.position.copy(stemPos);
-    E.pivot.quaternion.copy(pivotQuat);
-    E.pieceHolder.position.copy(pieceAnchor).sub(stemPos);
-  });
-}
-
-/* Al arrastrar el poste, la figura no debe saltar: se recalcula su anclaje
-   para que su posición en pantalla quede donde estaba antes del arrastre. */
-function onStemMoved() {
-  const worldBefore = pieceWorldPosition();
-  stemPos.copy(stemA.position);
-  stemQuat.copy(stemA.quaternion);
-  pivotQuat.setFromAxisAngle(stemAxis(), theta);
-  pieceAnchor.copy(worldBefore).sub(stemPos)
-    .applyQuaternion(pivotQuat.clone().invert())
-    .add(stemPos);
-  applyState();
-}
-
-/* "Voltear" invierte el eje de simetría del par. Como la rotación vive dentro
-   del grupo espejado, el reflejo sale correcto sin invertir el ángulo. */
-let flip = viewState.flip === -1 ? -1 : 1;
-
-function applyPairTransform() {
-  A.group.scale.x = flip;
-  B.group.scale.x = -flip;
-  applyState();
-}
-applyPairTransform();
-
-/* Encuadre inicial en función del tamaño real de la pieza. */
-(function frameCamera() {
-  const span = Math.max(spacing * 2 + pieceSize.x, STEM_LENGTH_MM);
-  const dist = span * 1.6;
-  camera.position.set(dist * 0.35, dist * 0.32, dist);
-  camera.updateProjectionMatrix();
-  controls.update();
-})();
-
-/* ---------- Control de Movimiento (gumball) ---------- */
-const gumball = new TransformControls(camera, renderer.domElement);
-gumball.attach(stemA);
-gumball.setMode('translate');
-gumball.visible = false;
-gumball.enabled = false;
-scene.add(gumball);
-gumball.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
-gumball.addEventListener('objectChange', onStemMoved);
-
-function setGumballMode(mode) {
-  gumball.setMode(mode);
-}
-
-const btnStemToggle = document.getElementById('btnStemToggle');
-btnStemToggle.addEventListener('click', () => {
-  const active = !gumball.enabled;
-  gumball.visible = active;
-  gumball.enabled = active;
-  btnStemToggle.classList.toggle('active', active);
-});
-window.addEventListener('keydown', (e) => {
-  if (!gumball.enabled) return;
-  if (e.key.toLowerCase() === 'w') setGumballMode('translate');
-  if (e.key.toLowerCase() === 'e') setGumballMode('rotate');
-});
-
-/* ---------- Voltear y rotar ---------- */
-document.getElementById('btnFlip').addEventListener('click', () => {
-  flip = -flip;
-  applyPairTransform();
-});
-
-const rotSlider = document.getElementById('rotSlider');
-const rotValue = document.getElementById('rotValue');
-let rotationDeg = Math.round(THREE.MathUtils.radToDeg(theta));
-rotSlider.value = String(rotationDeg);
-rotValue.textContent = rotationDeg + '°';
-rotSlider.addEventListener('input', (e) => {
-  rotationDeg = Number(e.target.value);
-  rotValue.textContent = rotationDeg + '°';
-  theta = THREE.MathUtils.degToRad(rotationDeg);
-  applyState();
-});
-
-/* ---------- Panel plegable ---------- */
-const panelWrap = document.getElementById('panelWrap');
-const panelToggle = document.getElementById('panelToggle');
-function setPanelCollapsed(collapsed) {
-  panelWrap.classList.toggle('collapsed', collapsed);
-  panelToggle.textContent = collapsed ? '‹' : '›';
-  panelToggle.setAttribute('aria-expanded', String(!collapsed));
-  panelToggle.setAttribute('aria-label', collapsed ? 'Mostrar panel' : 'Ocultar panel');
-}
-panelToggle.addEventListener('click', () => setPanelCollapsed(!panelWrap.classList.contains('collapsed')));
-// En pantallas angostas el panel arranca plegado para no tapar la pieza.
-setPanelCollapsed(window.matchMedia('(max-width: 720px)').matches);
-
-/* ============================================================
-   6. FONDO, PRECIOS Y QR DESDE EL SPREADSHEET
-   ============================================================ */
-const PRICE_PER_MM = {
-  'plata-brillante': null,
-  'plata-mate': null,
-  'oro-brillante': null,
-  'oro-mate': null,
-};
-
+/* Los enlaces normales de Drive (/file/d/ID/view) no se pueden usar como
+   src de una imagen. Se convierten al endpoint de miniatura, que sí sirve. */
 function normalizeImageUrl(url) {
   if (typeof url !== 'string') return '';
   const m = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:[^#]*&)?id=|thumbnail\?(?:[^#]*&)?id=)([\w-]{20,})/);
@@ -639,222 +404,835 @@ function normalizeImageUrl(url) {
   return url;
 }
 
-async function loadConfig() {
-  try {
-    const res = await fetch(CONFIG_URL);
-    const data = await res.json();
-
-    if (typeof data.color === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(data.color)) {
-      document.documentElement.style.setProperty('--bg', data.color);
-    }
-    if (data.image) {
-      const img = document.getElementById('bgImage');
-      img.src = normalizeImageUrl(data.image);
-      const scale = Math.min(100, Math.max(10, Number(data.scale) || 100));
-      img.style.width = scale + '%';
-      img.style.height = 'auto';
-    }
-    if (data.pricing) {
-      PRICE_PER_MM['plata-brillante'] = Number(data.pricing.plataBrillante) || null;
-      PRICE_PER_MM['plata-mate'] = Number(data.pricing.plataMate) || null;
-      PRICE_PER_MM['oro-brillante'] = Number(data.pricing.oroBrillante) || null;
-      PRICE_PER_MM['oro-mate'] = Number(data.pricing.oroMate) || null;
-    }
-    if (data.qr) {
-      document.getElementById('qrImage').src = normalizeImageUrl(data.qr);
-    }
-  } catch (err) {
-    console.error('No se pudo cargar el fondo/precios desde el spreadsheet:', err);
-  } finally {
-    updatePrice();
-  }
-}
-loadConfig();
-
 /* ============================================================
-   7. COTIZACIÓN — el pedido son dos aretes, así que el valor
-   mostrado y el enviado ya vienen multiplicados por el par.
+   HERRAMIENTA DE DIBUJO (tipo pluma: clic = ancla recta,
+   clic + arrastrar = ancla con manejadores/curva)
    ============================================================ */
-function unitPrice() {
-  const rate = PRICE_PER_MM[currentFinishKey];
-  return rate == null ? null : Math.round(design.totalLengthMm * rate);
-}
+const tool = new paper.Tool();
+const canvasEl = $('canvas');
 
-function updatePrice() {
-  const rate = PRICE_PER_MM[currentFinishKey];
-  const priceEl = document.getElementById('price');
-  const metaEl = document.getElementById('priceMeta');
-  if (rate == null) {
-    priceEl.textContent = 'Calculando…';
-    metaEl.textContent = 'Cargando precio desde el spreadsheet';
+// Estilo Rhino: el botón derecho nunca dibuja ni selecciona, solo panea.
+canvasEl.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// Mientras la imagen de calco esté desbloqueada, el lienzo la mueve en vez de dibujar.
+function traceIsEditable() { return !!traceRaster && !traceLocked; }
+
+tool.onMouseDown = (event) => {
+  if (multiTouch) return;
+  if (event.event.button === 2) { isPanning = true; return; }
+
+  if (traceIsEditable()) { dragOrigin = event.point; return; }
+
+  if (nodeEditMode) {
+    const hitOptions = { segments: true, handles: true, tolerance: 10 / paper.view.zoom };
+    let hit = outerPath && outerPath.hitTest(event.point, hitOptions);
+    if (!hit && holePath) hit = holePath.hitTest(event.point, hitOptions);
+    activeNodeHit = hit || null;
     return;
   }
-  const unit = unitPrice();
-  priceEl.textContent = '$' + (unit * UNITS_PER_PAIR).toLocaleString('es-CO');
-  metaEl.textContent = `Par de 2 aretes · ${design.totalLengthMm}mm × $${rate} = $${unit.toLocaleString('es-CO')} c/u`;
-}
 
-document.querySelectorAll('.finish-btn').forEach((btn) => {
-  btn.addEventListener('click', () => applyFinish(btn.dataset.finish));
-});
-applyFinish(currentFinishKey);
+  if (mode !== 'outer' && mode !== 'hole') return;
 
-/* ============================================================
-   8. FORMULARIO DE PEDIDO
-   ============================================================ */
-const COUNTRY_CODES = [
-  { code: '+57', name: 'Colombia' },
-  { code: '+54', name: 'Argentina' },
-  { code: '+591', name: 'Bolivia' },
-  { code: '+55', name: 'Brasil' },
-  { code: '+56', name: 'Chile' },
-  { code: '+506', name: 'Costa Rica' },
-  { code: '+593', name: 'Ecuador' },
-  { code: '+503', name: 'El Salvador' },
-  { code: '+34', name: 'España' },
-  { code: '+1', name: 'Estados Unidos / Canadá' },
-  { code: '+502', name: 'Guatemala' },
-  { code: '+504', name: 'Honduras' },
-  { code: '+52', name: 'México' },
-  { code: '+505', name: 'Nicaragua' },
-  { code: '+507', name: 'Panamá' },
-  { code: '+595', name: 'Paraguay' },
-  { code: '+51', name: 'Perú' },
-  { code: '+1809', name: 'República Dominicana' },
-  { code: '+598', name: 'Uruguay' },
-  { code: '+58', name: 'Venezuela' },
-];
-const countrySelect = document.getElementById('ofCountryCode');
-COUNTRY_CODES.forEach((c) => {
-  const opt = document.createElement('option');
-  // El value lleva el nombre para que no colisionen países con el mismo
-  // indicativo; el prefijo real viaja en dataset.code.
-  opt.value = c.name;
-  opt.dataset.code = c.code;
-  opt.textContent = `${c.name} (${c.code})`;
-  countrySelect.appendChild(opt);
-});
-countrySelect.value = 'Colombia';
-function selectedCountryCode() {
-  return countrySelect.selectedOptions[0].dataset.code;
-}
+  const point = clampToSquare(event.point);
+  const activePath = mode === 'outer' ? outerPath : holePath;
 
-/* Descarga del QR: se baja como blob para que el archivo quede guardado en el
-   dispositivo. Si el origen no manda cabeceras CORS (Drive, por ejemplo) no se
-   puede leer el blob, así que se abre en una pestaña para guardarlo a mano. */
-document.getElementById('btnQrDownload').addEventListener('click', async () => {
-  const src = document.getElementById('qrImage').src;
-  if (!src) return;
-  try {
-    const res = await fetch(src, { mode: 'cors' });
-    if (!res.ok) throw new Error('respuesta ' + res.status);
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'topitos-qr-pago.' + ((blob.type.split('/')[1] || 'png').replace('svg+xml', 'svg'));
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-  } catch (err) {
-    window.open(src, '_blank', 'noopener');
+  if (activePath && activePath.segments.length > 2) {
+    const start = activePath.firstSegment.point;
+    if (point.getDistance(start) <= CLOSE_THRESHOLD_MM) {
+      closeActivePath();
+      return;
+    }
   }
-});
 
-const orderModal = document.getElementById('orderModal');
-const orderForm = document.getElementById('orderForm');
-const orderStatus = document.getElementById('orderStatus');
-const btnOrderSubmit = document.getElementById('btnOrderSubmit');
+  if (mode === 'outer' && !outerPath) outerPath = newPath();
+  if (mode === 'hole' && !holePath) holePath = newPath();
 
-function setOrderStatus(text, kind) {
-  orderStatus.textContent = text;
-  orderStatus.classList.remove('error', 'success');
-  if (kind) orderStatus.classList.add(kind);
-}
+  const path = mode === 'outer' ? outerPath : holePath;
+  drawingSegment = path.add(point);
+  lastSegmentAt = Date.now();
+  dragOrigin = point;
+};
 
-document.getElementById('btnConfirm').addEventListener('click', () => {
-  if (PRICE_PER_MM[currentFinishKey] == null) {
-    setOrderStatus('', null);
-    alert('El precio todavía se está cargando desde el spreadsheet — espera un momento.');
+tool.onMouseDrag = (event) => {
+  if (multiTouch) return;
+  if (isPanning) { paper.view.center = paper.view.center.subtract(event.delta); return; }
+
+  if (traceIsEditable()) {
+    traceState.x += event.delta.x;
+    traceState.y += event.delta.y;
+    applyTraceTransform();
     return;
   }
-  setOrderStatus('', null);
-  orderModal.style.display = 'flex';
-});
-document.getElementById('btnOrderCancel').addEventListener('click', () => { orderModal.style.display = 'none'; });
 
-function fileToBase64(file) {
+  if (nodeEditMode) {
+    if (!activeNodeHit) return;
+    const seg = activeNodeHit.segment;
+    if (activeNodeHit.type === 'segment') seg.point = clampToSquare(seg.point.add(event.delta));
+    else if (activeNodeHit.type === 'handle-in') seg.handleIn = seg.handleIn.add(event.delta);
+    else if (activeNodeHit.type === 'handle-out') seg.handleOut = seg.handleOut.add(event.delta);
+    revalidateBridge();
+    return;
+  }
+
+  if (!drawingSegment) return;
+  const handle = event.point.subtract(dragOrigin);
+  drawingSegment.handleOut = handle;
+  drawingSegment.handleIn = handle.multiply(-1);
+};
+
+tool.onMouseUp = () => { drawingSegment = null; isPanning = false; activeNodeHit = null; };
+
+tool.onMouseMove = (event) => {
+  const p = event.point;
+  readout.textContent = `x: ${p.x.toFixed(2)}mm   y: ${p.y.toFixed(2)}mm   zoom: ${paper.view.zoom.toFixed(0)}x`;
+};
+
+function applyZoom(newZoomRaw, focusPoint) {
+  const oldZoom = paper.view.zoom;
+  const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, newZoomRaw));
+  const beta = oldZoom / newZoom;
+  const centerVec = focusPoint.subtract(paper.view.center);
+  paper.view.center = focusPoint.subtract(centerVec.multiply(beta));
+  paper.view.zoom = newZoom;
+}
+
+canvasEl.addEventListener('wheel', (event) => {
+  event.preventDefault();
+  const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+  const focus = paper.view.viewToProject(new paper.Point(event.offsetX, event.offsetY));
+  applyZoom(paper.view.zoom * factor, focus);
+}, { passive: false });
+
+/* ============================================================
+   GESTOS TÁCTILES — dos dedos hacen zoom y paneo. Un dedo dibuja.
+   Paper.js trata el toque como ratón, así que cuando entra un
+   segundo dedo se descarta el ancla recién creada (heurística de
+   250ms) para que el gesto de zoom no deje un punto suelto.
+   ============================================================ */
+let multiTouch = false;
+let lastSegmentAt = 0;
+let pinchStart = null;
+
+function touchesToProject(touches) {
+  const rect = canvasEl.getBoundingClientRect();
+  return Array.from(touches).slice(0, 2).map(t =>
+    paper.view.viewToProject(new paper.Point(t.clientX - rect.left, t.clientY - rect.top))
+  );
+}
+
+canvasEl.addEventListener('touchstart', (e) => {
+  if (e.touches.length < 2) return;
+  multiTouch = true;
+
+  // Deshace el ancla que el primer dedo acaba de crear al iniciar el gesto.
+  if (drawingSegment && Date.now() - lastSegmentAt < 250) {
+    const owner = drawingSegment.path;
+    if (owner) owner.removeSegment(drawingSegment.index);
+    drawingSegment = null;
+  }
+
+  const [a, b] = touchesToProject(e.touches);
+  pinchStart = { distance: a.getDistance(b), center: a.add(b).divide(2), zoom: paper.view.zoom };
+}, { passive: true });
+
+canvasEl.addEventListener('touchmove', (e) => {
+  if (!multiTouch || e.touches.length < 2 || !pinchStart) return;
+  e.preventDefault();
+  const [a, b] = touchesToProject(e.touches);
+  const distance = a.getDistance(b);
+  const center = a.add(b).divide(2);
+  if (pinchStart.distance > 0) {
+    applyZoom(pinchStart.zoom * (distance / pinchStart.distance), pinchStart.center);
+  }
+  paper.view.center = paper.view.center.subtract(center.subtract(pinchStart.center));
+}, { passive: false });
+
+canvasEl.addEventListener('touchend', (e) => {
+  if (e.touches.length === 0) { multiTouch = false; pinchStart = null; }
+}, { passive: true });
+canvasEl.addEventListener('touchcancel', () => { multiTouch = false; pinchStart = null; }, { passive: true });
+
+/* ============================================================
+   CIERRE, SUAVIZADO, AGUJERO, VALIDACIÓN
+   ============================================================ */
+
+/* Al cerrar el contorno ya no se salta al 3D: la figura queda en modo
+   edición para suavizar, mover nodos o agregar el agujero. El paso al 3D
+   lo da siempre el botón "Aceptar diseño". */
+function closeActivePath() {
+  if (mode === 'outer') {
+    outerPath.closed = true;
+    enterReviewOuter('Figura cerrada. Suaviza el trazo, edita nodos o agrega un agujero — y acepta cuando esté lista.');
+  } else if (mode === 'hole') {
+    holePath.closed = true;
+    mode = 'review-hole';
+    btnHole.textContent = 'Quitar agujero interno';
+    revalidateBridge();
+    flash(bridgeOk
+      ? 'Agujero agregado. Puedes seguir editando o aceptar el diseño.'
+      : 'El puente quedó por debajo de 1mm — ajusta el agujero para poder aceptar.');
+  }
+}
+
+function enterReviewOuter(message) {
+  mode = 'review-outer';
+  btnSmooth.disabled = false;
+  btnHole.disabled = false;
+  btnNodeEdit.disabled = false;
+  revalidateBridge();
+  if (message) flash(message);
+}
+
+let flashTimer = null;
+function flash(text) {
+  readout.textContent = text;
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { readout.textContent = ''; }, 5000);
+}
+
+/* Distancia mínima aproximada entre el agujero y el borde exterior,
+   muestreando puntos a lo largo del agujero. Suficiente para el
+   prototipo; en producción conviene una medida analítica exacta. */
+function minBridgeDistance(outer, hole) {
+  const samples = 120;
+  let min = Infinity;
+  for (let i = 0; i <= samples; i++) {
+    const point = hole.getPointAt((hole.length * i) / samples);
+    if (!point) continue;
+    const nearest = outer.getNearestPoint(point);
+    min = Math.min(min, point.getDistance(nearest));
+  }
+  return min;
+}
+
+/* El puente mínimo ahora bloquea el botón Aceptar, no solo avisa. */
+function revalidateBridge() {
+  if (holePath && holePath.closed && outerPath && outerPath.closed) {
+    bridgeOk = minBridgeDistance(outerPath, holePath) >= MIN_BRIDGE_MM;
+  } else {
+    bridgeOk = true;
+  }
+  warning.style.display = bridgeOk ? 'none' : 'block';
+  const ready = !!outerPath && outerPath.closed && mode !== 'hole';
+  btnAccept.disabled = !(ready && bridgeOk);
+}
+
+btnSmooth.addEventListener('click', () => {
+  if (outerPath) outerPath.smooth({ type: 'continuous' });
+  if (holePath) holePath.smooth({ type: 'continuous' });
+  revalidateBridge();
+});
+
+btnNodeEdit.addEventListener('click', () => {
+  nodeEditMode = !nodeEditMode;
+  btnNodeEdit.classList.toggle('active', nodeEditMode);
+  btnNodeEdit.textContent = nodeEditMode ? 'Editar nodos (activo)' : 'Editar nodos';
+  canvasEl.style.cursor = nodeEditMode ? 'default' : 'crosshair';
+  if (outerPath) outerPath.fullySelected = nodeEditMode;
+  if (holePath) holePath.fullySelected = nodeEditMode;
+});
+
+btnHole.addEventListener('click', () => {
+  if (holePath) {
+    holePath.remove();
+    holePath = null;
+    btnHole.textContent = 'Agregar agujero interno';
+    mode = 'review-outer';
+    revalidateBridge();
+    return;
+  }
+  mode = 'hole';
+  flash('Dibuja el agujero. Vuelve al primer punto para cerrarlo.');
+  revalidateBridge();
+});
+
+btnReset.addEventListener('click', resetAll);
+
+function resetAll() {
+  if (outerPath) outerPath.remove();
+  if (holePath) holePath.remove();
+  outerPath = null; holePath = null;
+  mode = 'outer';
+  btnSmooth.disabled = true;
+  btnHole.disabled = true;
+  btnHole.textContent = 'Agregar agujero interno';
+  nodeEditMode = false;
+  btnNodeEdit.disabled = true;
+  btnNodeEdit.classList.remove('active');
+  btnNodeEdit.textContent = 'Editar nodos';
+  canvasEl.style.cursor = 'crosshair';
+  try { sessionStorage.removeItem(DESIGN_KEY); } catch (e) {}
+  revalidateBridge();
+}
+
+/* ============================================================
+   CALCO — imagen de referencia bajo el dibujo
+   ============================================================ */
+const traceInput = $('traceInput');
+btnTrace.addEventListener('click', () => {
+  if (traceRaster) { tracePanel.style.display = 'block'; return; }
+  traceInput.click();
+});
+
+traceInput.addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  downscaleImage(file, 1400).then((dataUrl) => {
+    traceSrc = dataUrl;
+    traceState = { x: SQUARE_MM / 2, y: SQUARE_MM / 2, scale: 1, rotation: 0, opacity: 0.35 };
+    traceLocked = false;
+    createTraceRaster(dataUrl);
+    syncTraceControls();
+  }).catch((err) => flash('No se pudo cargar la imagen: ' + err.message));
+  traceInput.value = '';
+});
+
+/* La imagen se reduce antes de guardarla: sessionStorage tiene unos 5MB y
+   una foto de celular sin reducir lo llena de una sola vez. */
+function downscaleImage(file, maxSide) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(',')[1]);
     reader.onerror = () => reject(new Error('no se pudo leer el archivo'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('formato de imagen no válido'));
+      img.onload = () => {
+        const ratio = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * ratio);
+        c.height = Math.round(img.height * ratio);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = String(reader.result);
+    };
     reader.readAsDataURL(file);
   });
 }
 
-orderForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const file = document.getElementById('ofReceipt').files[0];
-  if (!file) { setOrderStatus('Adjunta el comprobante de pago.', 'error'); return; }
-  if (file.size > 8 * 1024 * 1024) { setOrderStatus('La imagen pesa más de 8MB. Sube una más liviana.', 'error'); return; }
+function createTraceRaster(dataUrl) {
+  if (traceRaster) { traceRaster.remove(); traceRaster = null; }
+  traceLayer.activate();
+  traceRaster = new paper.Raster({ source: dataUrl, crossOrigin: 'anonymous' });
+  traceRaster.onLoad = () => { applyTraceTransform(); };
+  drawLayer.activate();
+  tracePanel.style.display = 'block';
+  updateTraceHint();
+}
 
-  btnOrderSubmit.disabled = true;
-  setOrderStatus('Enviando…', null);
+function applyTraceTransform() {
+  if (!traceRaster || !traceRaster.width) return;
+  traceRaster.matrix.reset();
+  const base = SQUARE_MM / Math.max(traceRaster.width, traceRaster.height);
+  traceRaster.scale(base * traceState.scale);
+  traceRaster.rotate(traceState.rotation);
+  traceRaster.position = new paper.Point(traceState.x, traceState.y);
+  traceRaster.opacity = traceState.opacity;
+}
 
-  try {
-    const receiptBase64 = await fileToBase64(file);
-    const rate = PRICE_PER_MM[currentFinishKey];
-    const unit = unitPrice();
-    const payload = {
-      type: 'order',
-      firstName: document.getElementById('ofName').value.trim(),
-      lastName: document.getElementById('ofLastName').value.trim(),
-      email: document.getElementById('ofEmail').value.trim(),
-      countryCode: selectedCountryCode(),
-      whatsapp: document.getElementById('ofWhatsapp').value.trim(),
-      finish: currentFinishKey,
-      totalLengthMm: design.totalLengthMm,
-      pricePerMm: rate,
-      quantity: UNITS_PER_PAIR,
-      unitPrice: unit,
-      estimatedPrice: unit * UNITS_PER_PAIR,
-      rotationDeg,
-      mirrored: flip === 1 ? 'estándar' : 'volteado',
-      stemPosition: { x: +stemPos.x.toFixed(3), y: +stemPos.y.toFixed(3), z: +stemPos.z.toFixed(3) },
-      outerSVG: design.outerSVG,
-      holeSVG: design.holeSVG || '',
-      receiptBase64,
-      receiptFileName: file.name,
-      receiptMimeType: file.type || 'image/jpeg',
-    };
+function syncTraceControls() {
+  $('traceOpacity').value = Math.round(traceState.opacity * 100);
+  $('traceOpacityVal').textContent = Math.round(traceState.opacity * 100) + '%';
+  $('traceScale').value = Math.round(traceState.scale * 100);
+  $('traceScaleVal').textContent = Math.round(traceState.scale * 100) + '%';
+  $('traceRot').value = Math.round(traceState.rotation);
+  $('traceRotVal').textContent = Math.round(traceState.rotation) + '°';
+  ['traceScale', 'traceRot'].forEach(id => { $(id).disabled = traceLocked; });
+  $('btnTraceLock').textContent = traceLocked ? 'Desbloquear' : 'Bloquear';
+  updateTraceHint();
+}
 
-    /* Sin cabecera Content-Type a propósito: así el navegador la envía como
-       petición simple y no dispara el preflight CORS, que Apps Script no
-       responde. Si algún día agregas headers aquí, el POST dejará de pasar. */
-    const res = await fetch(CONFIG_URL, { method: 'POST', body: JSON.stringify(payload) });
-    const result = await res.json();
-    if (!result.ok) throw new Error(result.error || 'error desconocido en el servidor');
+function updateTraceHint() {
+  $('traceHint').textContent = traceLocked
+    ? 'Imagen bloqueada. Ya puedes dibujar encima; la opacidad sigue siendo ajustable.'
+    : 'Arrastra la imagen para moverla. Ajústala y bloquéala para dibujar encima.';
+  canvasEl.style.cursor = traceIsEditable() ? 'move' : (nodeEditMode ? 'default' : 'crosshair');
+}
 
-    setOrderStatus('Pedido enviado. Te contactaremos por WhatsApp.', 'success');
-    setTimeout(() => { orderModal.style.display = 'none'; }, 1800);
-  } catch (err) {
-    console.error(err);
-    setOrderStatus('No se pudo enviar el pedido: ' + err.message, 'error');
-  } finally {
-    btnOrderSubmit.disabled = false;
-  }
+$('traceOpacity').addEventListener('input', (e) => {
+  traceState.opacity = Number(e.target.value) / 100;
+  $('traceOpacityVal').textContent = e.target.value + '%';
+  if (traceRaster) traceRaster.opacity = traceState.opacity;
+});
+$('traceScale').addEventListener('input', (e) => {
+  traceState.scale = Number(e.target.value) / 100;
+  $('traceScaleVal').textContent = e.target.value + '%';
+  applyTraceTransform();
+});
+$('traceRot').addEventListener('input', (e) => {
+  traceState.rotation = Number(e.target.value);
+  $('traceRotVal').textContent = e.target.value + '°';
+  applyTraceTransform();
+});
+
+$('btnTraceLock').addEventListener('click', () => {
+  traceLocked = !traceLocked;
+  syncTraceControls();
+});
+
+$('btnTraceRemove').addEventListener('click', () => {
+  if (traceRaster) traceRaster.remove();
+  traceRaster = null; traceSrc = null; traceLocked = false;
+  tracePanel.style.display = 'none';
+  canvasEl.style.cursor = nodeEditMode ? 'default' : 'crosshair';
+  try { sessionStorage.removeItem(TRACE_KEY); } catch (e) {}
 });
 
 /* ============================================================
-   9. LOOP
+   FONDO, PRELUDE Y CATÁLOGO DESDE EL SPREADSHEET
+   Hoja "background": A1 imagen, B1 escala (10–100), C1 color de app.
+   Hoja "PRELUDE":    A2 logo,   B2 escala (1–100), C2 color de fondo.
+   Hoja "SVG CATALOG": A2:A url del SVG, B2:B url de la previsualización.
    ============================================================ */
-function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
+let catalogItems = [];
+let configPromise = null;
+
+function loadConfig() {
+  if (!configPromise) {
+    configPromise = fetch(CONFIG_URL).then(r => r.json()).catch((err) => {
+      console.error('No se pudo cargar la configuración:', err);
+      return {};
+    });
+  }
+  return configPromise;
 }
-animate();
+
+async function applyConfig() {
+  const data = await loadConfig();
+
+  if (typeof data.color === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(data.color)) {
+    document.documentElement.style.setProperty('--bg', data.color);
+  }
+  if (data.image) {
+    bgImage.src = normalizeImageUrl(data.image);
+    const scale = Math.min(100, Math.max(10, Number(data.scale) || 100));
+    bgImage.style.width = scale + '%';
+    bgImage.style.height = 'auto';
+  }
+  if (Array.isArray(data.catalog)) {
+    catalogItems = data.catalog.filter(it => it && it.svg);
+  }
+  return data;
+}
+
+/* ---------- PRELUDE ---------- */
+async function runPrelude() {
+  const prelude = $('prelude');
+  if (window.__preludeSeen) return;
+
+  // Si la configuración tarda, se revela la app igual: nadie espera 8s por un logo.
+  const data = await Promise.race([
+    loadConfig(),
+    new Promise(resolve => setTimeout(() => resolve(null), 2500)),
+  ]);
+
+  const cfg = (data && data.prelude) || {};
+  const logo = normalizeImageUrl(cfg.logo);
+  // El color del prelude sale de PRELUDE!C2; si está vacío usa el de la app
+  // (background!C1) para que el fundido no tenga costura.
+  const color = [cfg.color, data && data.color].find(c => typeof c === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c));
+  if (color) prelude.style.background = color;
+
+  if (!logo) { dismissPrelude(prelude, 0); return; }
+
+  const img = $('preludeLogo');
+  const scale = Math.min(100, Math.max(1, Number(cfg.scale) || 40));
+  img.style.width = scale + '%';
+  img.style.height = 'auto';
+
+  await new Promise((resolve) => {
+    const done = () => resolve();
+    img.onload = done;
+    img.onerror = done;
+    img.src = logo;
+    setTimeout(done, 2500);
+  });
+
+  img.classList.add('show');            // fade-in 400ms
+  setTimeout(() => dismissPrelude(prelude, 3000), 1600); // sostiene y funde 3s
+}
+
+function dismissPrelude(prelude, fadeMs) {
+  prelude.classList.add('fading');
+  setTimeout(() => prelude.remove(), fadeMs + 60);
+}
+
+applyConfig();
+runPrelude();
+
+/* ============================================================
+   ACEPTAR DISEÑO — se guarda la geometría completa (segmentos con
+   manejadores) además del pathData, para poder volver desde el 3D
+   y seguir editando en vez de empezar de cero.
+   ============================================================ */
+function serializePath(p) {
+  return {
+    closed: !!p.closed,
+    segments: p.segments.map(s => [
+      [s.point.x, s.point.y],
+      [s.handleIn.x, s.handleIn.y],
+      [s.handleOut.x, s.handleOut.y],
+    ]),
+  };
+}
+
+function deserializePath(data) {
+  const p = newPath();
+  data.segments.forEach((s) => {
+    p.add(new paper.Segment(
+      new paper.Point(s[0][0], s[0][1]),
+      new paper.Point(s[1][0], s[1][1]),
+      new paper.Point(s[2][0], s[2][1])
+    ));
+  });
+  p.closed = !!data.closed;
+  return p;
+}
+
+function acceptDesign() {
+  if (!outerPath || !outerPath.closed) { flash('Cierra el contorno antes de aceptar.'); return; }
+  revalidateBridge();
+  if (!bridgeOk) { flash('El puente mínimo es de 1mm — ajusta el agujero.'); return; }
+
+  const totalLengthMm = outerPath.length + (holePath ? holePath.length : 0);
+  const payload = {
+    outerSVG: outerPath.pathData,
+    holeSVG: holePath ? holePath.pathData : null,
+    totalLengthMm: Number(totalLengthMm.toFixed(3)),
+    editor: {
+      outer: serializePath(outerPath),
+      hole: holePath ? serializePath(holePath) : null,
+    },
+  };
+  sessionStorage.setItem(DESIGN_KEY, JSON.stringify(payload));
+
+  // El calco se guarda aparte: si no cabe, el diseño igual se conserva.
+  try {
+    if (traceSrc) {
+      sessionStorage.setItem(TRACE_KEY, JSON.stringify({ src: traceSrc, state: traceState, locked: traceLocked }));
+    }
+  } catch (err) {
+    console.warn('El calco no se pudo guardar (sin espacio) — el diseño sí:', err);
+  }
+
+  window.location.href = 'extrusion.html';
+}
+btnAccept.addEventListener('click', acceptDesign);
+
+/* ============================================================
+   RESTAURAR AL VOLVER DESDE EL 3D
+   ============================================================ */
+function restoreSession() {
+  let restored = false;
+  try {
+    const raw = sessionStorage.getItem(DESIGN_KEY);
+    const data = raw ? JSON.parse(raw) : null;
+    if (data && data.editor && data.editor.outer) {
+      drawLayer.activate();
+      outerPath = deserializePath(data.editor.outer);
+      if (data.editor.hole) {
+        holePath = deserializePath(data.editor.hole);
+        btnHole.textContent = 'Quitar agujero interno';
+      }
+      enterReviewOuter('Diseño recuperado. Puedes seguir editándolo.');
+      restored = true;
+    }
+  } catch (err) {
+    console.warn('No se pudo recuperar el diseño:', err);
+  }
+
+  try {
+    const rawTrace = sessionStorage.getItem(TRACE_KEY);
+    const t = rawTrace ? JSON.parse(rawTrace) : null;
+    if (t && t.src) {
+      traceSrc = t.src;
+      traceState = Object.assign(traceState, t.state || {});
+      traceLocked = !!t.locked;
+      createTraceRaster(t.src);
+      syncTraceControls();
+    }
+  } catch (err) {
+    console.warn('No se pudo recuperar el calco:', err);
+  }
+
+  return restored;
+}
+
+/* ============================================================
+   ETAPA 1 — IMPORTAR ARCHIVO, ELEGIR MOTIVO, O DIBUJAR A MANO
+   ============================================================ */
+const importScreen = $('importScreen');
+const importStatus = $('importStatus');
+const fileInput = $('fileInput');
+const stepImport = $('stepImport');
+const stepDraw = $('stepDraw');
+
+function closeImportScreen() {
+  importScreen.style.display = 'none';
+  stepImport.classList.remove('active');
+  stepDraw.classList.add('active');
+}
+
+function setImportStatus(text, isError) {
+  importStatus.textContent = text;
+  importStatus.classList.toggle('error', !!isError);
+}
+
+$('btnUpload').addEventListener('click', () => fileInput.click());
+$('btnSkipImport').addEventListener('click', closeImportScreen);
+
+fileInput.addEventListener('change', async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  setImportStatus('Cargando…', false);
+
+  try {
+    if (ext === 'svg') {
+      importSVGDesign(await file.text());
+    } else if (ext === 'dxf') {
+      await importDXFDesign(await file.text());
+    } else if (ext === 'pdf') {
+      setImportStatus('La importación de PDF todavía no está lista. Conviértelo a SVG, o usa la imagen como calco en el siguiente paso.', true);
+      return;
+    } else {
+      setImportStatus('Formato no reconocido — usa SVG o DXF.', true);
+      return;
+    }
+    closeImportScreen();
+  } catch (err) {
+    console.error(err);
+    setImportStatus('No se pudo leer el archivo: ' + err.message, true);
+  } finally {
+    fileInput.value = '';
+  }
+});
+
+/* Deja el path importado dentro del cuadrado de trabajo, centrado
+   y ocupando ~90% del área, para que quede editable de inmediato. */
+function fitPathToSquare(path, marginRatio = 0.9) {
+  const bounds = path.bounds;
+  const largestSide = Math.max(bounds.width, bounds.height);
+  if (largestSide > 0) {
+    const scale = (SQUARE_MM * marginRatio) / largestSide;
+    path.scale(scale, bounds.center);
+  }
+  path.position = new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2);
+}
+
+/* De un item importado (que puede ser un Group con varios paths),
+   se queda con el path/compound-path de mayor área — asumimos que
+   es el contorno principal de la pieza. */
+function flattenToSinglePath(item) {
+  if (item instanceof paper.Path || item instanceof paper.CompoundPath) return item;
+  if (item.children && item.children.length) {
+    let best = null, bestArea = -1;
+    item.children.forEach((child) => {
+      const candidate = flattenToSinglePath(child);
+      if (candidate) {
+        const area = Math.abs(candidate.area || 0);
+        if (area > bestArea) { bestArea = area; best = candidate; }
+      }
+    });
+    return best;
+  }
+  return null;
+}
+
+function styleAsOuter(path) {
+  path.strokeColor = '#ececef';
+  path.strokeWidth = 1.5;
+  path.strokeScaling = false;
+  path.fillColor = null;
+  return path;
+}
+
+/* Un CompoundPath se reparte en contorno + agujero: el hijo de mayor área
+   es el contorno, el segundo es el agujero y el resto se descarta (el
+   editor solo maneja un agujero). */
+function adoptImportedItem(item) {
+  drawLayer.activate();
+  resetAll();
+
+  let outer = item, hole = null;
+  if (item instanceof paper.CompoundPath) {
+    const kids = item.children.slice().sort((a, b) => Math.abs(b.area || 0) - Math.abs(a.area || 0));
+    const group = new paper.Group();
+    outer = kids[0];
+    hole = kids[1] || null;
+    if (outer) group.addChild(outer);
+    if (hole) group.addChild(hole);
+    kids.slice(2).forEach(k => k.remove());
+    item.remove();
+    // Escala contorno y agujero juntos para no romper su relación.
+    fitPathToSquare(group);
+    group.removeChildren();
+    if (outer) drawLayer.addChild(outer);
+    if (hole) drawLayer.addChild(hole);
+    group.remove();
+  } else {
+    fitPathToSquare(outer);
+  }
+
+  if (!outer) throw new Error('el trazo no es utilizable');
+  outerPath = styleAsOuter(outer);
+  outerPath.closed = true;
+  if (hole) {
+    holePath = styleAsOuter(hole);
+    holePath.closed = true;
+    btnHole.textContent = 'Quitar agujero interno';
+    mode = 'review-hole';
+  }
+  enterReviewOuter('Trazo cargado. Suavízalo, edita nodos o agrégale un agujero antes de aceptar.');
+}
+
+/* Un SVG de línea (fill="none" + stroke) no se puede extruir: un trazo sin
+   grosor no genera volumen. Se detecta antes de cargarlo para no dejar al
+   cliente con una pieza vacía en el paso 3. */
+function isStrokeOnlySVG(svgText) {
+  const hasFill = /fill\s*[:=]\s*["']?\s*(?!none)(#|rgb|url|[a-z])/i.test(svgText);
+  const strokeOnly = /fill\s*[:=]\s*["']?\s*none/i.test(svgText) && /stroke\s*[:=]\s*["']?\s*(?!none)/i.test(svgText);
+  return strokeOnly && !hasFill;
+}
+
+function importSVGDesign(svgText) {
+  if (isStrokeOnlySVG(svgText)) {
+    throw new Error('es un dibujo de línea, no una silueta rellena. Para poder extruirlo necesita ser una forma cerrada con relleno.');
+  }
+  const imported = paper.project.importSVG(svgText, { expandShapes: true });
+  if (!imported) throw new Error('el SVG no se pudo interpretar');
+  const path = flattenToSinglePath(imported);
+  if (!path) { imported.remove(); throw new Error('el SVG no contiene un trazo utilizable'); }
+  if (path !== imported) { path.remove(); imported.remove(); drawLayer.addChild(path); }
+  adoptImportedItem(path);
+}
+
+/* Soporte de DXF: mejor esfuerzo. Convierte LWPOLYLINE/POLYLINE y
+   CIRCLE a un path. Formas más complejas (splines, bloques anidados)
+   pueden no importarse bien — en ese caso, exporta a SVG desde tu
+   software de diseño y usa esa ruta en su lugar. */
+async function importDXFDesign(dxfText) {
+  const { default: DxfParser } = await import('https://esm.sh/dxf-parser@1.1.2');
+  const dxf = new DxfParser().parseSync(dxfText);
+  if (!dxf || !dxf.entities || !dxf.entities.length) {
+    throw new Error('no se encontraron entidades utilizables en el DXF');
+  }
+
+  let best = null, bestArea = -1;
+  dxf.entities.forEach((entity) => {
+    let candidate = null;
+    if ((entity.type === 'LWPOLYLINE' || entity.type === 'POLYLINE') && entity.vertices && entity.vertices.length > 2) {
+      candidate = new paper.Path(entity.vertices.map(v => new paper.Point(v.x, v.y)));
+      candidate.closed = true;
+    } else if (entity.type === 'CIRCLE') {
+      candidate = new paper.Path.Circle(new paper.Point(entity.center.x, entity.center.y), entity.radius);
+    }
+    if (candidate) {
+      const area = Math.abs(candidate.area || 0);
+      if (area > bestArea) {
+        if (best) best.remove();
+        bestArea = area; best = candidate;
+      } else candidate.remove();
+    }
+  });
+
+  if (!best) throw new Error('no se encontró un contorno cerrado utilizable en el DXF');
+  adoptImportedItem(best);
+}
+
+/* ============================================================
+   BIBLIOTECA DE MOTIVOS
+   Los SVG se piden a través del Web App (evita el bloqueo CORS de
+   Drive) y se cachean en localStorage para no volver a descargarlos.
+   ============================================================ */
+const catalogScreen = $('catalogScreen');
+const catalogGrid = $('catalogGrid');
+const catalogStatus = $('catalogStatus');
+const SVG_CACHE_PREFIX = 'topitos-svg:';
+
+function setCatalogStatus(text, isError) {
+  catalogStatus.textContent = text;
+  catalogStatus.classList.toggle('error', !!isError);
+}
+
+$('btnCatalog').addEventListener('click', openCatalog);
+$('btnCatalogClose').addEventListener('click', () => { catalogScreen.style.display = 'none'; });
+
+async function openCatalog() {
+  catalogScreen.style.display = 'flex';
+  if (!catalogItems.length) {
+    setCatalogStatus('Cargando motivos…', false);
+    await applyConfig();
+  }
+  renderCatalog();
+}
+
+function renderCatalog() {
+  catalogGrid.innerHTML = '';
+  if (!catalogItems.length) {
+    setCatalogStatus('Todavía no hay motivos en la biblioteca. Agrégalos en la hoja "SVG CATALOG".', false);
+    return;
+  }
+  setCatalogStatus('', false);
+  catalogItems.forEach((item, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'motif';
+    btn.type = 'button';
+    btn.title = 'Motivo ' + (i + 1);
+    const img = document.createElement('img');
+    img.loading = 'lazy';
+    img.alt = 'Motivo ' + (i + 1);
+    img.src = normalizeImageUrl(item.preview || item.svg);
+    btn.appendChild(img);
+    btn.addEventListener('click', () => chooseMotif(item, i));
+    catalogGrid.appendChild(btn);
+  });
+}
+
+async function fetchMotifSVG(url) {
+  const cacheKey = SVG_CACHE_PREFIX + url;
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) return cached;
+  } catch (e) {}
+
+  /* Los motivos se bajan directo del CDN. Cloudinary manda cabeceras CORS, así
+     que el navegador puede leerlos sin intermediarios. Un origen que no las
+     mande (Drive, por ejemplo) va a fallar aquí: la biblioteca necesita estar
+     alojada en un CDN con CORS. */
+  let res;
+  try {
+    res = await fetch(url, { mode: 'cors' });
+  } catch (err) {
+    throw new Error('el origen del motivo no permite descargas desde el navegador (falta CORS). Alójalo en Cloudinary.');
+  }
+  if (!res.ok) throw new Error('el CDN respondió ' + res.status);
+
+  const svg = await res.text();
+  if (svg.indexOf('<svg') === -1) throw new Error('el archivo no es un SVG');
+
+  try { localStorage.setItem(cacheKey, svg); } catch (e) { /* cuota llena: sigue sin caché */ }
+  return svg;
+}
+
+async function chooseMotif(item, i) {
+  setCatalogStatus('Cargando motivo…', false);
+  try {
+    const svgText = await fetchMotifSVG(item.svg);
+    importSVGDesign(svgText);
+    catalogScreen.style.display = 'none';
+    closeImportScreen();
+  } catch (err) {
+    console.error(err);
+    setCatalogStatus('No se pudo cargar ese motivo: ' + err.message, true);
+  }
+}
+
+/* ============================================================
+   ARRANQUE
+   ============================================================ */
+if (restoreSession()) closeImportScreen();
+revalidateBridge();
 </script>
 </body>
 </html>
