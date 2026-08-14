@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Topitos — Editor de figura</title>
 <style>
   :root {
@@ -20,11 +20,29 @@
     margin: 0; padding: 0; height: 100%; overflow: hidden;
     background: var(--bg); color: var(--text);
     font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+    -webkit-tap-highlight-color: transparent;
   }
   #app { position: relative; width: 100%; height: 100%; overflow: hidden; }
   canvas {
     position: absolute; top: 0; left: 0; z-index: 1;
     display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair;
+  }
+
+  /* ---------- PRELUDE ---------- */
+  #prelude {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg);
+    transition: opacity 3s ease;
+  }
+  #prelude.fading { opacity: 0; pointer-events: none; }
+  #preludeLogo {
+    max-width: 90%; max-height: 90%; object-fit: contain;
+    opacity: 0; transition: opacity .4s ease;
+  }
+  #preludeLogo.show { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) {
+    #prelude, #preludeLogo { transition-duration: .01ms; }
   }
 
   #topbar {
@@ -44,8 +62,9 @@
   }
 
   #actionbar {
-    position: absolute; bottom: 56px; left: 50%; transform: translateX(-50%); z-index: 2;
-    display: flex; gap: 8px;
+    position: absolute; bottom: 56px; left: 50%; transform: translateX(-50%); z-index: 3;
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+    max-width: calc(100% - 24px);
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 10px;
@@ -59,6 +78,7 @@
     transition: background 0.15s, color 0.15s, border-color 0.15s;
   }
   button:hover:not(:disabled) { background: rgba(255,255,255,0.06); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   button:disabled { color: var(--text-dim); cursor: not-allowed; opacity: 0.5; }
   button.primary { background: var(--accent); color: #0a0a0a; font-weight: 600; }
   button.primary:hover:not(:disabled) { background: #d8d8d8; }
@@ -75,6 +95,7 @@
     display: flex; align-items: center; justify-content: center; gap: 28px;
     padding: 16px 0;
     background: linear-gradient(to top, rgba(28,28,30,0.9), transparent);
+    pointer-events: none;
   }
   .step { display: flex; align-items: center; gap: 8px; opacity: 0.4; }
   .step.active { opacity: 1; }
@@ -87,41 +108,112 @@
     background: rgba(209,101,101,0.15);
     border: 1px solid var(--danger);
     color: #f0b8b8;
-    font-size: 12px;
+    font-size: 12px; text-align: center;
     padding: 8px 14px; border-radius: 8px;
+    max-width: calc(100% - 32px);
     display: none;
   }
 
-  #confirmModal {
-    position: absolute; inset: 0; z-index: 10;
-    background: rgba(0,0,0,0.55);
-    display: none; align-items: center; justify-content: center;
-  }
-  #confirmModal .card {
-    background: var(--panel); border: 1px solid var(--line);
-    border-radius: 14px; padding: 24px 28px; width: 300px; text-align: center;
-  }
-  #confirmModal h2 { font-size: 15px; margin: 0 0 4px; }
-  #confirmModal p { font-size: 12px; color: var(--text-dim); margin: 0 0 18px; }
-  #confirmModal .row { display: flex; gap: 8px; justify-content: center; }
-
+  /* ---------- PANTALLA DE INICIO ---------- */
   #importScreen {
     position: absolute; inset: 0; z-index: 10;
     background: var(--bg);
     display: flex; align-items: center; justify-content: center;
+    padding: 20px;
   }
   #importScreen .card {
     background: var(--panel); border: 1px solid var(--line);
-    border-radius: 14px; padding: 32px; width: 360px; text-align: center;
+    border-radius: 14px; padding: 32px; width: 380px; max-width: 100%; text-align: center;
   }
   #importScreen h2 { font-size: 16px; margin: 0 0 8px; }
   #importScreen p { font-size: 12px; color: var(--text-dim); margin: 0 0 22px; line-height: 1.5; }
   #importScreen .row { display: flex; flex-direction: column; gap: 8px; }
   #importStatus { font-size: 11px; color: var(--text-dim); margin-top: 12px; min-height: 14px; }
   #importStatus.error { color: var(--danger); }
+
+  /* ---------- BIBLIOTECA DE MOTIVOS ---------- */
+  #catalogScreen {
+    position: absolute; inset: 0; z-index: 11;
+    background: rgba(0,0,0,0.72);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  #catalogScreen .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 22px; width: 560px; max-width: 100%;
+    max-height: 86vh; display: flex; flex-direction: column;
+  }
+  #catalogScreen h2 { font-size: 16px; margin: 0 0 4px; }
+  #catalogScreen .subtitle { font-size: 12px; color: var(--text-dim); margin: 0 0 16px; }
+  #catalogGrid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 10px; overflow-y: auto; padding: 2px;
+  }
+  .motif {
+    border: 1px solid var(--line); border-radius: 10px; padding: 8px;
+    background: rgba(255,255,255,0.03); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    aspect-ratio: 1 / 1;
+  }
+  .motif:hover, .motif:focus-visible { border-color: var(--accent); }
+  .motif img { width: 100%; height: 100%; object-fit: contain; }
+  #catalogStatus { font-size: 12px; color: var(--text-dim); min-height: 16px; margin-top: 12px; }
+  #catalogStatus.error { color: var(--danger); }
+  #catalogScreen .row { display: flex; justify-content: flex-end; margin-top: 12px; }
+
+  /* ---------- PANEL DE CALCO ---------- */
+  #tracePanel {
+    position: absolute; top: 56px; right: 16px; z-index: 3;
+    width: 210px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px;
+    display: none;
+  }
+  #tracePanel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 8px; }
+  .ref-hint { font-size: 11px; color: var(--text-dim); line-height: 1.4; margin-bottom: 10px; }
+  .slider-label {
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: var(--text-dim); margin: 10px 0 4px;
+  }
+  #tracePanel input[type=range] { width: 100%; accent-color: var(--accent); }
+  #tracePanel input[type=range]:disabled { opacity: .4; }
+  .ref-row { display: flex; gap: 6px; margin-top: 12px; }
+  .ref-row button { flex: 1; font-size: 12px; padding: 8px 6px; }
+
+  /* ---------- MÓVIL ---------- */
+  @media (max-width: 720px) {
+    #topbar { padding: 10px 14px; }
+    #topbar h1 { font-size: 13px; }
+    #hint { display: none; }
+    #readout { top: 40px; left: 14px; font-size: 11px; }
+    #actionbar { bottom: 52px; padding: 6px; gap: 6px; border-radius: 12px; }
+    #actionbar button { font-size: 12px; padding: 8px 10px; }
+    #stepper { gap: 14px; padding: 12px 0; }
+    .step-label { font-size: 10px; }
+    #tracePanel { top: auto; bottom: 150px; right: 12px; left: 12px; width: auto; }
+  }
 </style>
 </head>
 <body>
+
+<div id="prelude"><img id="preludeLogo" alt=""></div>
+<script>
+  /* El prelude se muestra una sola vez por sesión. Si el usuario ya lo vio
+     (por ejemplo al volver desde la vista 3D), se retira antes del primer
+     pintado para que no haya parpadeo. */
+  (function () {
+    var seen = false;
+    try { seen = sessionStorage.getItem('topitos-prelude-shown') === '1'; } catch (e) {}
+    if (seen) {
+      document.getElementById('prelude').style.display = 'none';
+    } else {
+      try { sessionStorage.setItem('topitos-prelude-shown', '1'); } catch (e) {}
+    }
+    window.__preludeSeen = seen;
+  })();
+</script>
 
 <div id="app">
   <img id="bgImage" alt="">
@@ -133,9 +225,29 @@
   </div>
 
   <div id="readout"></div>
-  <div id="warning">El puente entre el agujero y el borde es menor a 1&nbsp;mm — ajusta el agujero.</div>
+  <div id="warning">El puente entre el agujero y el borde es menor a 1&nbsp;mm — ajusta el agujero para continuar.</div>
+
+  <div id="tracePanel">
+    <h2>Imagen de calco</h2>
+    <div class="ref-hint" id="traceHint">Arrastra la imagen para moverla. Ajústala y bloquéala para dibujar encima.</div>
+
+    <div class="slider-label"><span>Opacidad</span><span id="traceOpacityVal">35%</span></div>
+    <input id="traceOpacity" type="range" min="10" max="80" value="35">
+
+    <div class="slider-label"><span>Escala</span><span id="traceScaleVal">100%</span></div>
+    <input id="traceScale" type="range" min="20" max="400" value="100">
+
+    <div class="slider-label"><span>Rotación</span><span id="traceRotVal">0°</span></div>
+    <input id="traceRot" type="range" min="-180" max="180" value="0">
+
+    <div class="ref-row">
+      <button id="btnTraceLock" class="primary">Bloquear</button>
+      <button id="btnTraceRemove" class="danger">Quitar</button>
+    </div>
+  </div>
 
   <div id="actionbar">
+    <button id="btnTrace">Calcar imagen</button>
     <button id="btnSmooth" disabled>Suavizar trazo</button>
     <button id="btnHole" disabled>Agregar agujero interno</button>
     <button id="btnNodeEdit" disabled>Editar nodos</button>
@@ -149,30 +261,32 @@
     <div class="step"><div class="step-dot"></div><div class="step-label">3 · Extrusión 3D</div></div>
   </div>
 
-  <div id="confirmModal">
-    <div class="card">
-      <h2 id="confirmTitle">Figura completa</h2>
-      <p id="confirmBody">¿Confirmas este diseño o prefieres reiniciar?</p>
-      <div class="row">
-        <button id="btnConfirmReset" class="danger">Reiniciar</button>
-        <button id="btnConfirmAccept" class="primary">Aceptar</button>
-      </div>
-    </div>
-  </div>
-
   <div id="importScreen">
     <div class="card">
-      <h2>¿Tienes un archivo de tu diseño?</h2>
-      <p>Puedes subir un PDF, SVG o DXF y lo ajustamos al área de trabajo. Si no tienes uno, no hay problema — puedes dibujar tu figura a mano en el siguiente paso.</p>
+      <h2>¿Cómo quieres empezar?</h2>
+      <p>Sube un archivo de tu diseño, elige un motivo de la biblioteca, o dibuja tu figura a mano en el siguiente paso.</p>
       <input type="file" id="fileInput" accept=".svg,.dxf,.pdf" hidden>
       <div class="row">
         <button id="btnUpload" class="primary">Subir archivo</button>
-        <button id="btnSkipImport">Continuar sin archivo</button>
+        <button id="btnCatalog">Elegir un motivo</button>
+        <button id="btnSkipImport">Dibujar a mano</button>
       </div>
       <div id="importStatus"></div>
     </div>
   </div>
+
+  <div id="catalogScreen">
+    <div class="card">
+      <h2>Biblioteca de motivos</h2>
+      <p class="subtitle">Elige un motivo. Podrás editar sus nodos, suavizarlo o agregarle un agujero antes de aceptar.</p>
+      <div id="catalogGrid"></div>
+      <div id="catalogStatus">Cargando motivos…</div>
+      <div class="row"><button id="btnCatalogClose">Cerrar</button></div>
+    </div>
+  </div>
 </div>
+
+<input type="file" id="traceInput" accept="image/*" hidden>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-full.min.js"></script>
 <script>
@@ -181,7 +295,7 @@
    así que cualquier distancia en project-space ya está en mm,
    sin importar el nivel de zoom. Esto es lo que permite que el
    usuario se acerque a detallar sin romper la validación de
-   cierre (1mm) o de puentes (1mm).
+   cierre (0.2mm) o de puentes (1mm).
    ============================================================ */
 const SQUARE_MM = 10;
 const CLOSE_THRESHOLD_MM = 0.2;
@@ -189,18 +303,26 @@ const MIN_BRIDGE_MM = 1;
 const MIN_ZOOM = 8;
 const MAX_ZOOM = 400;
 
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxFadCSx3bdtHeC2pZoh4LWGV9eQS7E4vjbuvTW77ON_BN0wiVtjEjsSxoCngJCKWrK/exec';
+const DESIGN_KEY = 'topitos-design';
+const TRACE_KEY = 'topitos-trace';
+
 paper.setup('canvas');
 
+/* El encuadre inicial se calcula una sola vez. Antes se recalculaba en cada
+   "resize", lo que en móvil borraba el zoom del usuario cada vez que aparecía
+   el teclado o cambiaba la orientación. El atributo resize del canvas ya
+   mantiene la vista correcta al cambiar de tamaño. */
 function fitView() {
   const targetPx = paper.view.viewSize.height * 0.7;
-  paper.view.zoom = targetPx / SQUARE_MM;
+  paper.view.zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, targetPx / SQUARE_MM));
   paper.view.center = new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2);
 }
 fitView();
-window.addEventListener('resize', fitView);
 
 const gridLayer = new paper.Layer();
 function drawGrid() {
+  gridLayer.activate();
   gridLayer.removeChildren();
   for (let i = 0; i <= SQUARE_MM; i++) {
     const v = new paper.Path.Line(new paper.Point(i, 0), new paper.Point(i, SQUARE_MM));
@@ -218,34 +340,45 @@ function drawGrid() {
 }
 drawGrid();
 
+/* La capa de calco va entre la grilla y el dibujo: la imagen tapa la grilla
+   pero nunca las líneas que el cliente está trazando. */
+const traceLayer = new paper.Layer();
 const drawLayer = new paper.Layer();
-paper.project.activeLayer = drawLayer;
+drawLayer.activate();
 
 /* ============================================================
    ESTADO
    ============================================================ */
 let outerPath = null;
 let holePath = null;
-let mode = 'outer';       // 'outer' | 'hole' | 'review-outer' | 'review-hole' | 'done'
+let mode = 'outer';       // 'outer' | 'hole' | 'review-outer' | 'review-hole'
 let drawingSegment = null;
 let dragOrigin = null;
 let isPanning = false;
 let nodeEditMode = false;
-let activeNodeHit = null; // { segment, type: 'segment' | 'handle-in' | 'handle-out' }
+let activeNodeHit = null;
+let bridgeOk = true;
+
+let traceRaster = null;
+let traceLocked = false;
+let traceState = { x: SQUARE_MM / 2, y: SQUARE_MM / 2, scale: 1, rotation: 0, opacity: 0.35 };
+let traceSrc = null;
 
 const $ = id => document.getElementById(id);
 const readout = $('readout');
 const warning = $('warning');
+const btnTrace = $('btnTrace');
 const btnSmooth = $('btnSmooth');
 const btnHole = $('btnHole');
 const btnNodeEdit = $('btnNodeEdit');
 const btnAccept = $('btnAccept');
 const btnReset = $('btnReset');
 const bgImage = $('bgImage');
+const tracePanel = $('tracePanel');
 
 function newPath() {
   const p = new paper.Path();
-  p.strokeColor = '#eceCEF';
+  p.strokeColor = '#ececef';
   p.strokeWidth = 1.5;
   p.strokeScaling = false;
   p.fillColor = null;
@@ -262,21 +395,36 @@ function clampToSquare(point) {
   );
 }
 
+/* Los enlaces normales de Drive (/file/d/ID/view) no se pueden usar como
+   src de una imagen. Se convierten al endpoint de miniatura, que sí sirve. */
+function normalizeImageUrl(url) {
+  if (typeof url !== 'string') return '';
+  const m = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:[^#]*&)?id=|thumbnail\?(?:[^#]*&)?id=)([\w-]{20,})/);
+  if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1200';
+  return url;
+}
+
 /* ============================================================
    HERRAMIENTA DE DIBUJO (tipo pluma: clic = ancla recta,
    clic + arrastrar = ancla con manejadores/curva)
    ============================================================ */
 const tool = new paper.Tool();
-const canvasEl = document.getElementById('canvas');
+const canvasEl = $('canvas');
 
 // Estilo Rhino: el botón derecho nunca dibuja ni selecciona, solo panea.
 canvasEl.addEventListener('contextmenu', (e) => e.preventDefault());
 
+// Mientras la imagen de calco esté desbloqueada, el lienzo la mueve en vez de dibujar.
+function traceIsEditable() { return !!traceRaster && !traceLocked; }
+
 tool.onMouseDown = (event) => {
+  if (multiTouch) return;
   if (event.event.button === 2) { isPanning = true; return; }
 
+  if (traceIsEditable()) { dragOrigin = event.point; return; }
+
   if (nodeEditMode) {
-    const hitOptions = { segments: true, handles: true, tolerance: 8 / paper.view.zoom };
+    const hitOptions = { segments: true, handles: true, tolerance: 10 / paper.view.zoom };
     let hit = outerPath && outerPath.hitTest(event.point, hitOptions);
     if (!hit && holePath) hit = holePath.hitTest(event.point, hitOptions);
     activeNodeHit = hit || null;
@@ -301,11 +449,20 @@ tool.onMouseDown = (event) => {
 
   const path = mode === 'outer' ? outerPath : holePath;
   drawingSegment = path.add(point);
+  lastSegmentAt = Date.now();
   dragOrigin = point;
 };
 
 tool.onMouseDrag = (event) => {
+  if (multiTouch) return;
   if (isPanning) { paper.view.center = paper.view.center.subtract(event.delta); return; }
+
+  if (traceIsEditable()) {
+    traceState.x += event.delta.x;
+    traceState.y += event.delta.y;
+    applyTraceTransform();
+    return;
+  }
 
   if (nodeEditMode) {
     if (!activeNodeHit) return;
@@ -313,6 +470,7 @@ tool.onMouseDrag = (event) => {
     if (activeNodeHit.type === 'segment') seg.point = clampToSquare(seg.point.add(event.delta));
     else if (activeNodeHit.type === 'handle-in') seg.handleIn = seg.handleIn.add(event.delta);
     else if (activeNodeHit.type === 'handle-out') seg.handleOut = seg.handleOut.add(event.delta);
+    revalidateBridge();
     return;
   }
 
@@ -329,42 +487,107 @@ tool.onMouseMove = (event) => {
   readout.textContent = `x: ${p.x.toFixed(2)}mm   y: ${p.y.toFixed(2)}mm   zoom: ${paper.view.zoom.toFixed(0)}x`;
 };
 
-document.getElementById('canvas').addEventListener('wheel', (event) => {
-  event.preventDefault();
+function applyZoom(newZoomRaw, focusPoint) {
   const oldZoom = paper.view.zoom;
-  const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
-  const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, oldZoom * factor));
-
-  const mousePosition = paper.view.viewToProject(new paper.Point(event.offsetX, event.offsetY));
+  const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, newZoomRaw));
   const beta = oldZoom / newZoom;
-  const centerVec = mousePosition.subtract(paper.view.center);
-  paper.view.center = mousePosition.subtract(centerVec.multiply(beta));
+  const centerVec = focusPoint.subtract(paper.view.center);
+  paper.view.center = focusPoint.subtract(centerVec.multiply(beta));
   paper.view.zoom = newZoom;
+}
+
+canvasEl.addEventListener('wheel', (event) => {
+  event.preventDefault();
+  const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+  const focus = paper.view.viewToProject(new paper.Point(event.offsetX, event.offsetY));
+  applyZoom(paper.view.zoom * factor, focus);
 }, { passive: false });
+
+/* ============================================================
+   GESTOS TÁCTILES — dos dedos hacen zoom y paneo. Un dedo dibuja.
+   Paper.js trata el toque como ratón, así que cuando entra un
+   segundo dedo se descarta el ancla recién creada (heurística de
+   250ms) para que el gesto de zoom no deje un punto suelto.
+   ============================================================ */
+let multiTouch = false;
+let lastSegmentAt = 0;
+let pinchStart = null;
+
+function touchesToProject(touches) {
+  const rect = canvasEl.getBoundingClientRect();
+  return Array.from(touches).slice(0, 2).map(t =>
+    paper.view.viewToProject(new paper.Point(t.clientX - rect.left, t.clientY - rect.top))
+  );
+}
+
+canvasEl.addEventListener('touchstart', (e) => {
+  if (e.touches.length < 2) return;
+  multiTouch = true;
+
+  // Deshace el ancla que el primer dedo acaba de crear al iniciar el gesto.
+  if (drawingSegment && Date.now() - lastSegmentAt < 250) {
+    const owner = drawingSegment.path;
+    if (owner) owner.removeSegment(drawingSegment.index);
+    drawingSegment = null;
+  }
+
+  const [a, b] = touchesToProject(e.touches);
+  pinchStart = { distance: a.getDistance(b), center: a.add(b).divide(2), zoom: paper.view.zoom };
+}, { passive: true });
+
+canvasEl.addEventListener('touchmove', (e) => {
+  if (!multiTouch || e.touches.length < 2 || !pinchStart) return;
+  e.preventDefault();
+  const [a, b] = touchesToProject(e.touches);
+  const distance = a.getDistance(b);
+  const center = a.add(b).divide(2);
+  if (pinchStart.distance > 0) {
+    applyZoom(pinchStart.zoom * (distance / pinchStart.distance), pinchStart.center);
+  }
+  paper.view.center = paper.view.center.subtract(center.subtract(pinchStart.center));
+}, { passive: false });
+
+canvasEl.addEventListener('touchend', (e) => {
+  if (e.touches.length === 0) { multiTouch = false; pinchStart = null; }
+}, { passive: true });
+canvasEl.addEventListener('touchcancel', () => { multiTouch = false; pinchStart = null; }, { passive: true });
 
 /* ============================================================
    CIERRE, SUAVIZADO, AGUJERO, VALIDACIÓN
    ============================================================ */
+
+/* Al cerrar el contorno ya no se salta al 3D: la figura queda en modo
+   edición para suavizar, mover nodos o agregar el agujero. El paso al 3D
+   lo da siempre el botón "Aceptar diseño". */
 function closeActivePath() {
   if (mode === 'outer') {
     outerPath.closed = true;
-    mode = 'review-outer';
-    btnSmooth.disabled = false;
-    btnHole.disabled = false;
-    btnNodeEdit.disabled = false;
-    btnAccept.disabled = false;
-    openConfirm('Figura completa', '¿Confirmas este diseño o prefieres reiniciar?');
+    enterReviewOuter('Figura cerrada. Suaviza el trazo, edita nodos o agrega un agujero — y acepta cuando esté lista.');
   } else if (mode === 'hole') {
     holePath.closed = true;
-    const bridge = minBridgeDistance(outerPath, holePath);
-    warning.style.display = bridge < MIN_BRIDGE_MM ? 'block' : 'none';
     mode = 'review-hole';
     btnHole.textContent = 'Quitar agujero interno';
-    btnAccept.disabled = false;
-    openConfirm('Agujero agregado', bridge < MIN_BRIDGE_MM
-      ? 'El puente mínimo quedó por debajo de 1mm. Revisa el agujero antes de aceptar.'
-      : '¿Confirmas este diseño o prefieres reiniciar?');
+    revalidateBridge();
+    flash(bridgeOk
+      ? 'Agujero agregado. Puedes seguir editando o aceptar el diseño.'
+      : 'El puente quedó por debajo de 1mm — ajusta el agujero para poder aceptar.');
   }
+}
+
+function enterReviewOuter(message) {
+  mode = 'review-outer';
+  btnSmooth.disabled = false;
+  btnHole.disabled = false;
+  btnNodeEdit.disabled = false;
+  revalidateBridge();
+  if (message) flash(message);
+}
+
+let flashTimer = null;
+function flash(text) {
+  readout.textContent = text;
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { readout.textContent = ''; }, 5000);
 }
 
 /* Distancia mínima aproximada entre el agujero y el borde exterior,
@@ -382,9 +605,22 @@ function minBridgeDistance(outer, hole) {
   return min;
 }
 
+/* El puente mínimo ahora bloquea el botón Aceptar, no solo avisa. */
+function revalidateBridge() {
+  if (holePath && holePath.closed && outerPath && outerPath.closed) {
+    bridgeOk = minBridgeDistance(outerPath, holePath) >= MIN_BRIDGE_MM;
+  } else {
+    bridgeOk = true;
+  }
+  warning.style.display = bridgeOk ? 'none' : 'block';
+  const ready = !!outerPath && outerPath.closed && mode !== 'hole';
+  btnAccept.disabled = !(ready && bridgeOk);
+}
+
 btnSmooth.addEventListener('click', () => {
-  outerPath.smooth({ type: 'continuous' });
+  if (outerPath) outerPath.smooth({ type: 'continuous' });
   if (holePath) holePath.smooth({ type: 'continuous' });
+  revalidateBridge();
 });
 
 btnNodeEdit.addEventListener('click', () => {
@@ -400,13 +636,14 @@ btnHole.addEventListener('click', () => {
   if (holePath) {
     holePath.remove();
     holePath = null;
-    warning.style.display = 'none';
     btnHole.textContent = 'Agregar agujero interno';
     mode = 'review-outer';
+    revalidateBridge();
     return;
   }
   mode = 'hole';
-  btnAccept.disabled = true;
+  flash('Dibuja el agujero. Vuelve al primer punto para cerrarlo.');
+  revalidateBridge();
 });
 
 btnReset.addEventListener('click', resetAll);
@@ -416,7 +653,6 @@ function resetAll() {
   if (holePath) holePath.remove();
   outerPath = null; holePath = null;
   mode = 'outer';
-  warning.style.display = 'none';
   btnSmooth.disabled = true;
   btnHole.disabled = true;
   btnHole.textContent = 'Agregar agujero interno';
@@ -425,81 +661,305 @@ function resetAll() {
   btnNodeEdit.classList.remove('active');
   btnNodeEdit.textContent = 'Editar nodos';
   canvasEl.style.cursor = 'crosshair';
-  btnAccept.disabled = true;
-  closeConfirm();
+  try { sessionStorage.removeItem(DESIGN_KEY); } catch (e) {}
+  revalidateBridge();
 }
 
 /* ============================================================
-   MODAL ACEPTAR / REINICIAR
+   CALCO — imagen de referencia bajo el dibujo
    ============================================================ */
-const modal = $('confirmModal');
-function openConfirm(title, body) {
-  $('confirmTitle').textContent = title;
-  $('confirmBody').textContent = body;
-  modal.style.display = 'flex';
-}
-function closeConfirm() { modal.style.display = 'none'; }
+const traceInput = $('traceInput');
+btnTrace.addEventListener('click', () => {
+  if (traceRaster) { tracePanel.style.display = 'block'; return; }
+  traceInput.click();
+});
 
-$('btnConfirmReset').addEventListener('click', resetAll);
-$('btnConfirmAccept').addEventListener('click', () => { closeConfirm(); acceptDesign(); });
-btnAccept.addEventListener('click', acceptDesign);
+traceInput.addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  downscaleImage(file, 1400).then((dataUrl) => {
+    traceSrc = dataUrl;
+    traceState = { x: SQUARE_MM / 2, y: SQUARE_MM / 2, scale: 1, rotation: 0, opacity: 0.35 };
+    traceLocked = false;
+    createTraceRaster(dataUrl);
+    syncTraceControls();
+  }).catch((err) => flash('No se pudo cargar la imagen: ' + err.message));
+  traceInput.value = '';
+});
+
+/* La imagen se reduce antes de guardarla: sessionStorage tiene unos 5MB y
+   una foto de celular sin reducir lo llena de una sola vez. */
+function downscaleImage(file, maxSide) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('no se pudo leer el archivo'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('formato de imagen no válido'));
+      img.onload = () => {
+        const ratio = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * ratio);
+        c.height = Math.round(img.height * ratio);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function createTraceRaster(dataUrl) {
+  if (traceRaster) { traceRaster.remove(); traceRaster = null; }
+  traceLayer.activate();
+  traceRaster = new paper.Raster({ source: dataUrl, crossOrigin: 'anonymous' });
+  traceRaster.onLoad = () => { applyTraceTransform(); };
+  drawLayer.activate();
+  tracePanel.style.display = 'block';
+  updateTraceHint();
+}
+
+function applyTraceTransform() {
+  if (!traceRaster || !traceRaster.width) return;
+  traceRaster.matrix.reset();
+  const base = SQUARE_MM / Math.max(traceRaster.width, traceRaster.height);
+  traceRaster.scale(base * traceState.scale);
+  traceRaster.rotate(traceState.rotation);
+  traceRaster.position = new paper.Point(traceState.x, traceState.y);
+  traceRaster.opacity = traceState.opacity;
+}
+
+function syncTraceControls() {
+  $('traceOpacity').value = Math.round(traceState.opacity * 100);
+  $('traceOpacityVal').textContent = Math.round(traceState.opacity * 100) + '%';
+  $('traceScale').value = Math.round(traceState.scale * 100);
+  $('traceScaleVal').textContent = Math.round(traceState.scale * 100) + '%';
+  $('traceRot').value = Math.round(traceState.rotation);
+  $('traceRotVal').textContent = Math.round(traceState.rotation) + '°';
+  ['traceScale', 'traceRot'].forEach(id => { $(id).disabled = traceLocked; });
+  $('btnTraceLock').textContent = traceLocked ? 'Desbloquear' : 'Bloquear';
+  updateTraceHint();
+}
+
+function updateTraceHint() {
+  $('traceHint').textContent = traceLocked
+    ? 'Imagen bloqueada. Ya puedes dibujar encima; la opacidad sigue siendo ajustable.'
+    : 'Arrastra la imagen para moverla. Ajústala y bloquéala para dibujar encima.';
+  canvasEl.style.cursor = traceIsEditable() ? 'move' : (nodeEditMode ? 'default' : 'crosshair');
+}
+
+$('traceOpacity').addEventListener('input', (e) => {
+  traceState.opacity = Number(e.target.value) / 100;
+  $('traceOpacityVal').textContent = e.target.value + '%';
+  if (traceRaster) traceRaster.opacity = traceState.opacity;
+});
+$('traceScale').addEventListener('input', (e) => {
+  traceState.scale = Number(e.target.value) / 100;
+  $('traceScaleVal').textContent = e.target.value + '%';
+  applyTraceTransform();
+});
+$('traceRot').addEventListener('input', (e) => {
+  traceState.rotation = Number(e.target.value);
+  $('traceRotVal').textContent = e.target.value + '°';
+  applyTraceTransform();
+});
+
+$('btnTraceLock').addEventListener('click', () => {
+  traceLocked = !traceLocked;
+  syncTraceControls();
+});
+
+$('btnTraceRemove').addEventListener('click', () => {
+  if (traceRaster) traceRaster.remove();
+  traceRaster = null; traceSrc = null; traceLocked = false;
+  tracePanel.style.display = 'none';
+  canvasEl.style.cursor = nodeEditMode ? 'default' : 'crosshair';
+  try { sessionStorage.removeItem(TRACE_KEY); } catch (e) {}
+});
 
 /* ============================================================
-   FONDO DESDE EL SPREADSHEET
-   Hoja "Background": A1 = imagen, B1 = escala (10–100%),
-   C1 = color de fondo de toda la app en hex (con "#").
-   Reemplaza BACKGROUND_CONFIG_URL por la URL de tu Web App de
-   Apps Script (doGet) que devuelva JSON:
-   { "image": "...", "scale": 60, "color": "#141414" }
+   FONDO, PRELUDE Y CATÁLOGO DESDE EL SPREADSHEET
+   Hoja "background": A1 imagen, B1 escala (10–100), C1 color de app.
+   Hoja "PRELUDE":    A2 logo,   B2 escala (1–100), C2 color de fondo.
+   Hoja "SVG CATALOG": A2:A url del SVG, B2:B url de la previsualización.
    ============================================================ */
-const BACKGROUND_CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwb_1A-mZqeJGmTFolc3jvtZXV0dY3Tp8bJFDY5WFLvOhlpxaGlY9gooz-90yRMmbU2/exec';
+let catalogItems = [];
+let configPromise = null;
 
-async function loadBackgroundConfig() {
-  if (!BACKGROUND_CONFIG_URL || BACKGROUND_CONFIG_URL.startsWith('PON_AQUI')) {
-    console.warn('BACKGROUND_CONFIG_URL sin configurar — se omite la carga de fondo del spreadsheet.');
-    return;
+function loadConfig() {
+  if (!configPromise) {
+    configPromise = fetch(CONFIG_URL).then(r => r.json()).catch((err) => {
+      console.error('No se pudo cargar la configuración:', err);
+      return {};
+    });
   }
-  try {
-    const res = await fetch(BACKGROUND_CONFIG_URL);
-    const data = await res.json();
-
-    if (typeof data.color === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(data.color)) {
-      document.documentElement.style.setProperty('--bg', data.color);
-    }
-
-    if (data.image) {
-      bgImage.src = data.image;
-      const scale = Math.min(100, Math.max(10, Number(data.scale) || 100));
-      bgImage.style.width = scale + '%';
-      bgImage.style.height = 'auto';
-    }
-  } catch (err) {
-    console.error('No se pudo cargar el fondo desde el spreadsheet:', err);
-  }
+  return configPromise;
 }
-loadBackgroundConfig();
+
+async function applyConfig() {
+  const data = await loadConfig();
+
+  if (typeof data.color === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(data.color)) {
+    document.documentElement.style.setProperty('--bg', data.color);
+  }
+  if (data.image) {
+    bgImage.src = normalizeImageUrl(data.image);
+    const scale = Math.min(100, Math.max(10, Number(data.scale) || 100));
+    bgImage.style.width = scale + '%';
+    bgImage.style.height = 'auto';
+  }
+  if (Array.isArray(data.catalog)) {
+    catalogItems = data.catalog.filter(it => it && it.svg);
+  }
+  return data;
+}
+
+/* ---------- PRELUDE ---------- */
+async function runPrelude() {
+  const prelude = $('prelude');
+  if (window.__preludeSeen) return;
+
+  // Si la configuración tarda, se revela la app igual: nadie espera 8s por un logo.
+  const data = await Promise.race([
+    loadConfig(),
+    new Promise(resolve => setTimeout(() => resolve(null), 2500)),
+  ]);
+
+  const cfg = (data && data.prelude) || {};
+  const logo = normalizeImageUrl(cfg.logo);
+  // El color del prelude sale de PRELUDE!C2; si está vacío usa el de la app
+  // (background!C1) para que el fundido no tenga costura.
+  const color = [cfg.color, data && data.color].find(c => typeof c === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c));
+  if (color) prelude.style.background = color;
+
+  if (!logo) { dismissPrelude(prelude, 0); return; }
+
+  const img = $('preludeLogo');
+  const scale = Math.min(100, Math.max(1, Number(cfg.scale) || 40));
+  img.style.width = scale + '%';
+  img.style.height = 'auto';
+
+  await new Promise((resolve) => {
+    const done = () => resolve();
+    img.onload = done;
+    img.onerror = done;
+    img.src = logo;
+    setTimeout(done, 2500);
+  });
+
+  img.classList.add('show');            // fade-in 400ms
+  setTimeout(() => dismissPrelude(prelude, 3000), 1600); // sostiene y funde 3s
+}
+
+function dismissPrelude(prelude, fadeMs) {
+  prelude.classList.add('fading');
+  setTimeout(() => prelude.remove(), fadeMs + 60);
+}
+
+applyConfig();
+runPrelude();
 
 /* ============================================================
-   ACEPTAR DISEÑO — punto de entrega hacia el siguiente paso
-   (extrusión 3D a 0.8mm). Por ahora deja los datos listos en
-   consola y en pantalla para verificar que el path sale limpio.
+   ACEPTAR DISEÑO — se guarda la geometría completa (segmentos con
+   manejadores) además del pathData, para poder volver desde el 3D
+   y seguir editando en vez de empezar de cero.
    ============================================================ */
+function serializePath(p) {
+  return {
+    closed: !!p.closed,
+    segments: p.segments.map(s => [
+      [s.point.x, s.point.y],
+      [s.handleIn.x, s.handleIn.y],
+      [s.handleOut.x, s.handleOut.y],
+    ]),
+  };
+}
+
+function deserializePath(data) {
+  const p = newPath();
+  data.segments.forEach((s) => {
+    p.add(new paper.Segment(
+      new paper.Point(s[0][0], s[0][1]),
+      new paper.Point(s[1][0], s[1][1]),
+      new paper.Point(s[2][0], s[2][1])
+    ));
+  });
+  p.closed = !!data.closed;
+  return p;
+}
+
 function acceptDesign() {
+  if (!outerPath || !outerPath.closed) { flash('Cierra el contorno antes de aceptar.'); return; }
+  revalidateBridge();
+  if (!bridgeOk) { flash('El puente mínimo es de 1mm — ajusta el agujero.'); return; }
+
   const totalLengthMm = outerPath.length + (holePath ? holePath.length : 0);
   const payload = {
     outerSVG: outerPath.pathData,
     holeSVG: holePath ? holePath.pathData : null,
     totalLengthMm: Number(totalLengthMm.toFixed(3)),
+    editor: {
+      outer: serializePath(outerPath),
+      hole: holePath ? serializePath(holePath) : null,
+    },
   };
-  console.log('Diseño aceptado →', payload);
-  sessionStorage.setItem('topitos-design', JSON.stringify(payload));
-  mode = 'done';
-  readout.textContent = `Longitud total: ${payload.totalLengthMm}mm — abriendo vista 3D…`;
+  sessionStorage.setItem(DESIGN_KEY, JSON.stringify(payload));
+
+  // El calco se guarda aparte: si no cabe, el diseño igual se conserva.
+  try {
+    if (traceSrc) {
+      sessionStorage.setItem(TRACE_KEY, JSON.stringify({ src: traceSrc, state: traceState, locked: traceLocked }));
+    }
+  } catch (err) {
+    console.warn('El calco no se pudo guardar (sin espacio) — el diseño sí:', err);
+  }
+
   window.location.href = 'extrusion.html';
+}
+btnAccept.addEventListener('click', acceptDesign);
+
+/* ============================================================
+   RESTAURAR AL VOLVER DESDE EL 3D
+   ============================================================ */
+function restoreSession() {
+  let restored = false;
+  try {
+    const raw = sessionStorage.getItem(DESIGN_KEY);
+    const data = raw ? JSON.parse(raw) : null;
+    if (data && data.editor && data.editor.outer) {
+      drawLayer.activate();
+      outerPath = deserializePath(data.editor.outer);
+      if (data.editor.hole) {
+        holePath = deserializePath(data.editor.hole);
+        btnHole.textContent = 'Quitar agujero interno';
+      }
+      enterReviewOuter('Diseño recuperado. Puedes seguir editándolo.');
+      restored = true;
+    }
+  } catch (err) {
+    console.warn('No se pudo recuperar el diseño:', err);
+  }
+
+  try {
+    const rawTrace = sessionStorage.getItem(TRACE_KEY);
+    const t = rawTrace ? JSON.parse(rawTrace) : null;
+    if (t && t.src) {
+      traceSrc = t.src;
+      traceState = Object.assign(traceState, t.state || {});
+      traceLocked = !!t.locked;
+      createTraceRaster(t.src);
+      syncTraceControls();
+    }
+  } catch (err) {
+    console.warn('No se pudo recuperar el calco:', err);
+  }
+
+  return restored;
 }
 
 /* ============================================================
-   ETAPA 1 — IMPORTAR PDF / SVG / DXF (o continuar sin archivo)
+   ETAPA 1 — IMPORTAR ARCHIVO, ELEGIR MOTIVO, O DIBUJAR A MANO
    ============================================================ */
 const importScreen = $('importScreen');
 const importStatus = $('importStatus');
@@ -533,16 +993,18 @@ fileInput.addEventListener('change', async (event) => {
     } else if (ext === 'dxf') {
       await importDXFDesign(await file.text());
     } else if (ext === 'pdf') {
-      setImportStatus('La importación automática de PDF todavía no está lista. Convierte tu archivo a SVG, o dibuja la figura a mano en el siguiente paso.', true);
+      setImportStatus('La importación de PDF todavía no está lista. Conviértelo a SVG, o usa la imagen como calco en el siguiente paso.', true);
       return;
     } else {
-      setImportStatus('Formato no reconocido — usa PDF, SVG o DXF.', true);
+      setImportStatus('Formato no reconocido — usa SVG o DXF.', true);
       return;
     }
     closeImportScreen();
   } catch (err) {
     console.error(err);
     setImportStatus('No se pudo leer el archivo: ' + err.message, true);
+  } finally {
+    fileInput.value = '';
   }
 });
 
@@ -577,29 +1039,60 @@ function flattenToSinglePath(item) {
   return null;
 }
 
-function adoptImportedOuter(path) {
-  path.strokeColor = '#eceCEF';
+function styleAsOuter(path) {
+  path.strokeColor = '#ececef';
   path.strokeWidth = 1.5;
   path.strokeScaling = false;
   path.fillColor = null;
-  path.closed = true;
-  fitPathToSquare(path);
-  outerPath = path;
+  return path;
+}
 
-  mode = 'review-outer';
-  btnSmooth.disabled = false;
-  btnHole.disabled = false;
-  btnNodeEdit.disabled = false;
-  btnAccept.disabled = false;
-  openConfirm('Figura importada', 'Revisa el trazo — puedes suavizarlo, editar nodos o agregar un agujero antes de aceptar.');
+/* Un CompoundPath se reparte en contorno + agujero: el hijo de mayor área
+   es el contorno, el segundo es el agujero y el resto se descarta (el
+   editor solo maneja un agujero). */
+function adoptImportedItem(item) {
+  drawLayer.activate();
+  resetAll();
+
+  let outer = item, hole = null;
+  if (item instanceof paper.CompoundPath) {
+    const kids = item.children.slice().sort((a, b) => Math.abs(b.area || 0) - Math.abs(a.area || 0));
+    const group = new paper.Group();
+    outer = kids[0];
+    hole = kids[1] || null;
+    if (outer) group.addChild(outer);
+    if (hole) group.addChild(hole);
+    kids.slice(2).forEach(k => k.remove());
+    item.remove();
+    // Escala contorno y agujero juntos para no romper su relación.
+    fitPathToSquare(group);
+    group.removeChildren();
+    if (outer) drawLayer.addChild(outer);
+    if (hole) drawLayer.addChild(hole);
+    group.remove();
+  } else {
+    fitPathToSquare(outer);
+  }
+
+  if (!outer) throw new Error('el trazo no es utilizable');
+  outerPath = styleAsOuter(outer);
+  outerPath.closed = true;
+  if (hole) {
+    holePath = styleAsOuter(hole);
+    holePath.closed = true;
+    btnHole.textContent = 'Quitar agujero interno';
+    mode = 'review-hole';
+  }
+  enterReviewOuter('Trazo cargado. Suavízalo, edita nodos o agrégale un agujero antes de aceptar.');
 }
 
 function importSVGDesign(svgText) {
   const imported = paper.project.importSVG(svgText, { expandShapes: true });
+  if (!imported) throw new Error('el SVG no se pudo interpretar');
   const path = flattenToSinglePath(imported);
-  if (!path) throw new Error('el SVG no contiene un trazo utilizable');
-  if (path !== imported) imported.remove();
-  adoptImportedOuter(path);
+  if (!path) { imported.remove(); throw new Error('el SVG no contiene un trazo utilizable'); }
+  if (path !== imported) { path.remove(); imported.remove(); drawLayer.addChild(path); }
+  adoptImportedItem(path);
 }
 
 /* Soporte de DXF: mejor esfuerzo. Convierte LWPOLYLINE/POLYLINE y
@@ -624,14 +1117,99 @@ async function importDXFDesign(dxfText) {
     }
     if (candidate) {
       const area = Math.abs(candidate.area || 0);
-      if (area > bestArea) { bestArea = area; best = candidate; }
-      else candidate.remove();
+      if (area > bestArea) {
+        if (best) best.remove();
+        bestArea = area; best = candidate;
+      } else candidate.remove();
     }
   });
 
   if (!best) throw new Error('no se encontró un contorno cerrado utilizable en el DXF');
-  adoptImportedOuter(best);
+  adoptImportedItem(best);
 }
+
+/* ============================================================
+   BIBLIOTECA DE MOTIVOS
+   Los SVG se piden a través del Web App (evita el bloqueo CORS de
+   Drive) y se cachean en localStorage para no volver a descargarlos.
+   ============================================================ */
+const catalogScreen = $('catalogScreen');
+const catalogGrid = $('catalogGrid');
+const catalogStatus = $('catalogStatus');
+const SVG_CACHE_PREFIX = 'topitos-svg:';
+
+function setCatalogStatus(text, isError) {
+  catalogStatus.textContent = text;
+  catalogStatus.classList.toggle('error', !!isError);
+}
+
+$('btnCatalog').addEventListener('click', openCatalog);
+$('btnCatalogClose').addEventListener('click', () => { catalogScreen.style.display = 'none'; });
+
+async function openCatalog() {
+  catalogScreen.style.display = 'flex';
+  if (!catalogItems.length) {
+    setCatalogStatus('Cargando motivos…', false);
+    await applyConfig();
+  }
+  renderCatalog();
+}
+
+function renderCatalog() {
+  catalogGrid.innerHTML = '';
+  if (!catalogItems.length) {
+    setCatalogStatus('Todavía no hay motivos en la biblioteca. Agrégalos en la hoja "SVG CATALOG".', false);
+    return;
+  }
+  setCatalogStatus('', false);
+  catalogItems.forEach((item, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'motif';
+    btn.type = 'button';
+    btn.title = 'Motivo ' + (i + 1);
+    const img = document.createElement('img');
+    img.loading = 'lazy';
+    img.alt = 'Motivo ' + (i + 1);
+    img.src = normalizeImageUrl(item.preview || item.svg);
+    btn.appendChild(img);
+    btn.addEventListener('click', () => chooseMotif(item, i));
+    catalogGrid.appendChild(btn);
+  });
+}
+
+async function fetchMotifSVG(url) {
+  const cacheKey = SVG_CACHE_PREFIX + url;
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) return cached;
+  } catch (e) {}
+
+  const res = await fetch(CONFIG_URL + '?svg=' + encodeURIComponent(url));
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'no se pudo descargar el motivo');
+
+  try { localStorage.setItem(cacheKey, data.svg); } catch (e) { /* cuota llena: sigue sin caché */ }
+  return data.svg;
+}
+
+async function chooseMotif(item, i) {
+  setCatalogStatus('Cargando motivo…', false);
+  try {
+    const svgText = await fetchMotifSVG(item.svg);
+    importSVGDesign(svgText);
+    catalogScreen.style.display = 'none';
+    closeImportScreen();
+  } catch (err) {
+    console.error(err);
+    setCatalogStatus('No se pudo cargar ese motivo: ' + err.message, true);
+  }
+}
+
+/* ============================================================
+   ARRANQUE
+   ============================================================ */
+if (restoreSession()) closeImportScreen();
+revalidateBridge();
 </script>
 </body>
 </html>
