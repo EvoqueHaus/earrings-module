@@ -80,6 +80,46 @@
   .step-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); }
   .step.active .step-dot { background: var(--accent); }
   .step-label { font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; }
+
+  #orderModal {
+    position: absolute; inset: 0; z-index: 10;
+    background: rgba(0,0,0,0.6);
+    display: none; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  #orderModal .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 26px 28px; width: 360px;
+    max-height: 88vh; overflow-y: auto;
+  }
+  #orderModal h2 { font-size: 16px; margin: 0 0 4px; }
+  #orderModal .subtitle { font-size: 12px; color: var(--text-dim); margin: 0 0 18px; }
+  #orderModal label {
+    display: block; font-size: 11px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.03em; margin: 14px 0 6px;
+  }
+  #orderModal input, #orderModal select {
+    width: 100%; font-family: inherit; font-size: 13px;
+    background: rgba(255,255,255,0.04); color: var(--text);
+    border: 1px solid var(--line); border-radius: 7px; padding: 9px 10px;
+  }
+  #orderModal input:focus, #orderModal select:focus { outline: 1px solid var(--accent); }
+  .whatsapp-row { display: grid; grid-template-columns: 110px 1fr; gap: 8px; }
+  .whatsapp-row label { grid-column: 1 / -1; }
+
+  #qrBlock {
+    margin-top: 18px; padding: 14px; border-radius: 10px;
+    background: rgba(255,255,255,0.03); border: 1px solid var(--line);
+    text-align: center;
+  }
+  #qrBlock img { width: 140px; height: 140px; object-fit: contain; background: #fff; border-radius: 8px; padding: 8px; }
+  #qrBlock p { font-size: 12px; color: var(--text-dim); margin: 10px 0 0; line-height: 1.5; }
+
+  #orderStatus { font-size: 12px; color: var(--text-dim); margin-top: 14px; min-height: 14px; }
+  #orderStatus.error { color: #e08a8a; }
+  #orderStatus.success { color: #8fd19e; }
+
+  #orderModal .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
 </style>
 </head>
 <body>
@@ -118,6 +158,43 @@
     <div class="step"><div class="step-dot"></div><div class="step-label">1 · Importar</div></div>
     <div class="step"><div class="step-dot"></div><div class="step-label">2 · Dibujar</div></div>
     <div class="step active"><div class="step-dot"></div><div class="step-label">3 · Extrusión 3D</div></div>
+  </div>
+
+  <div id="orderModal">
+    <div class="card">
+      <h2>Confirmar pedido</h2>
+      <p class="subtitle">Completa tus datos, realiza el pago y sube el comprobante.</p>
+      <form id="orderForm">
+        <label for="ofName">Nombre completo</label>
+        <input id="ofName" type="text" required>
+
+        <label for="ofLastName">Apellidos completos</label>
+        <input id="ofLastName" type="text" required>
+
+        <label for="ofEmail">Correo electrónico</label>
+        <input id="ofEmail" type="email" required>
+
+        <div class="whatsapp-row">
+          <label>WhatsApp</label>
+          <select id="ofCountryCode"></select>
+          <input id="ofWhatsapp" type="tel" placeholder="Número" required>
+        </div>
+
+        <div id="qrBlock">
+          <img id="qrImage" alt="Código QR de pago">
+          <p>Escanea este código QR para realizar el pago. Una vez hayas realizado el pago, sube el comprobante en el siguiente campo.</p>
+        </div>
+
+        <label for="ofReceipt">Comprobante de pago</label>
+        <input id="ofReceipt" type="file" accept="image/*" required>
+
+        <div id="orderStatus"></div>
+        <div class="row">
+          <button type="button" id="btnOrderCancel">Cancelar</button>
+          <button type="submit" id="btnOrderSubmit" class="confirm" style="width:auto; padding:10px 18px;">Enviar</button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 
@@ -162,9 +239,10 @@ if (!design) {
    2. ESCENA
    ============================================================ */
 const canvas = document.getElementById('canvas');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x000000, 0); // transparente — el fondo real lo pone #bgImage detrás
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
 const scene = new THREE.Scene();
@@ -336,6 +414,10 @@ async function loadBackgroundAndPricing() {
       PRICE_PER_MM['oro-brillante'] = Number(data.pricing.oroBrillante) || null;
       PRICE_PER_MM['oro-mate'] = Number(data.pricing.oroMate) || null;
     }
+
+    if (data.qr) {
+      document.getElementById('qrImage').src = data.qr;
+    }
   } catch (err) {
     console.error('No se pudo cargar el fondo/precios desde el spreadsheet:', err);
   } finally {
@@ -364,25 +446,120 @@ document.querySelectorAll('.finish-btn').forEach((btn) => {
 });
 applyFinish(currentFinishKey);
 
+/* ============================================================
+   8. FORMULARIO DE PEDIDO
+   ============================================================ */
+const COUNTRY_CODES = [
+  { code: '+57', name: 'Colombia' },
+  { code: '+1', name: 'Estados Unidos / Canadá' },
+  { code: '+52', name: 'México' },
+  { code: '+34', name: 'España' },
+  { code: '+51', name: 'Perú' },
+  { code: '+56', name: 'Chile' },
+  { code: '+593', name: 'Ecuador' },
+  { code: '+58', name: 'Venezuela' },
+  { code: '+507', name: 'Panamá' },
+  { code: '+506', name: 'Costa Rica' },
+  { code: '+503', name: 'El Salvador' },
+  { code: '+502', name: 'Guatemala' },
+  { code: '+504', name: 'Honduras' },
+  { code: '+505', name: 'Nicaragua' },
+  { code: '+1', name: 'República Dominicana' },
+  { code: '+54', name: 'Argentina' },
+  { code: '+598', name: 'Uruguay' },
+  { code: '+595', name: 'Paraguay' },
+  { code: '+591', name: 'Bolivia' },
+  { code: '+55', name: 'Brasil' },
+];
+const countrySelect = document.getElementById('ofCountryCode');
+COUNTRY_CODES.forEach((c) => {
+  const opt = document.createElement('option');
+  opt.value = c.code;
+  opt.textContent = `${c.name} (${c.code})`;
+  countrySelect.appendChild(opt);
+});
+countrySelect.value = '+57';
+
+const orderModal = document.getElementById('orderModal');
+const orderForm = document.getElementById('orderForm');
+const orderStatus = document.getElementById('orderStatus');
+const btnOrderSubmit = document.getElementById('btnOrderSubmit');
+
+function setOrderStatus(text, kind) {
+  orderStatus.textContent = text;
+  orderStatus.classList.remove('error', 'success');
+  if (kind) orderStatus.classList.add(kind);
+}
+
+function openOrderModal() {
+  setOrderStatus('', null);
+  orderModal.style.display = 'flex';
+}
+function closeOrderModal() { orderModal.style.display = 'none'; }
+
 document.getElementById('btnConfirm').addEventListener('click', () => {
-  const rate = PRICE_PER_MM[currentFinishKey];
-  if (rate == null) { alert('El precio todavía se está cargando desde el spreadsheet — espera un momento.'); return; }
-  const order = {
-    finish: currentFinishKey,
-    totalLengthMm: design.totalLengthMm,
-    pricePerMm: rate,
-    estimatedPrice: Math.round(design.totalLengthMm * rate),
-    stemPosition: stemGroup.position.toArray(),
-    stemRotation: [stemGroup.rotation.x, stemGroup.rotation.y, stemGroup.rotation.z],
-  };
-  console.log('Pedido confirmado →', order);
-  // TODO(paso 4): enviar `order` al Web App de Apps Script que genera
-  // la cotización formal y dispara el correo de alerta (MailApp).
-  alert('Pedido registrado en consola — falta conectar el envío de cotización/correo (siguiente paso).');
+  if (PRICE_PER_MM[currentFinishKey] == null) {
+    alert('El precio todavía se está cargando desde el spreadsheet — espera un momento.');
+    return;
+  }
+  openOrderModal();
+});
+document.getElementById('btnOrderCancel').addEventListener('click', closeOrderModal);
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1]);
+    reader.onerror = () => reject(new Error('no se pudo leer el archivo'));
+    reader.readAsDataURL(file);
+  });
+}
+
+orderForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const file = document.getElementById('ofReceipt').files[0];
+  if (!file) { setOrderStatus('Adjunta el comprobante de pago.', 'error'); return; }
+  if (file.size > 8 * 1024 * 1024) { setOrderStatus('La imagen es muy pesada (máx. 8MB).', 'error'); return; }
+
+  btnOrderSubmit.disabled = true;
+  setOrderStatus('Enviando…', null);
+
+  try {
+    const receiptBase64 = await fileToBase64(file);
+    const rate = PRICE_PER_MM[currentFinishKey];
+    const payload = {
+      type: 'order',
+      firstName: document.getElementById('ofName').value.trim(),
+      lastName: document.getElementById('ofLastName').value.trim(),
+      email: document.getElementById('ofEmail').value.trim(),
+      countryCode: countrySelect.value,
+      whatsapp: document.getElementById('ofWhatsapp').value.trim(),
+      finish: currentFinishKey,
+      totalLengthMm: design.totalLengthMm,
+      pricePerMm: rate,
+      estimatedPrice: Math.round(design.totalLengthMm * rate),
+      receiptBase64,
+      receiptFileName: file.name,
+      receiptMimeType: file.type || 'image/jpeg',
+    };
+
+    const res = await fetch(BACKGROUND_CONFIG_URL, { method: 'POST', body: JSON.stringify(payload) });
+    const result = await res.json();
+    if (!result.ok) throw new Error(result.error || 'error desconocido en el servidor');
+
+    console.log('Pedido guardado →', result);
+    setOrderStatus('¡Pedido enviado! Te contactaremos pronto.', 'success');
+    setTimeout(closeOrderModal, 1800);
+  } catch (err) {
+    console.error(err);
+    setOrderStatus('No se pudo enviar el pedido: ' + err.message, 'error');
+  } finally {
+    btnOrderSubmit.disabled = false;
+  }
 });
 
 /* ============================================================
-   8. LOOP
+   9. LOOP
    ============================================================ */
 function animate() {
   requestAnimationFrame(animate);
