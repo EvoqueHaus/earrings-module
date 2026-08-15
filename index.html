@@ -182,17 +182,92 @@
   .ref-row { display: flex; gap: 6px; margin-top: 12px; }
   .ref-row button { flex: 1; font-size: 12px; padding: 8px 6px; }
 
+  /* ---------- OVERLAY DE CARGA (Lottie) ---------- */
+  #loadingOverlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(10,10,10,0.78);
+    display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 14px;
+  }
+  #loadingOverlay .spinner { width: 84px; height: 84px; }
+  #loadingOverlay .msg { font-size: 12px; color: var(--text-dim); letter-spacing: 0.02em; }
+
+  /* ---------- COMPUERTA DE TÉRMINOS Y CONDICIONES ---------- */
+  #termsGate {
+    position: fixed; inset: 0; z-index: 40;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  #termsGate .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 30px; width: 380px; max-width: 100%; text-align: center;
+  }
+  #termsGate h2 { font-size: 16px; margin: 0 0 10px; }
+  #termsGate p { font-size: 12px; color: var(--text-dim); line-height: 1.55; margin: 0 0 16px; }
+  #termsGate a { color: var(--text); }
+  #termsGate label {
+    display: flex; align-items: flex-start; gap: 8px; text-align: left;
+    font-size: 12px; color: var(--text-dim); margin-bottom: 18px; cursor: pointer;
+  }
+  #termsGate input[type=checkbox] { margin-top: 2px; accent-color: var(--accent); }
+
+  /* ---------- BUSCADOR DEL CATÁLOGO ---------- */
+  #catalogSearch {
+    width: 100%; font-family: inherit; font-size: 13px;
+    background: rgba(255,255,255,0.04); color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 9px 12px; margin-bottom: 12px;
+  }
+  #catalogSearch:focus { outline: 1px solid var(--accent); }
+
+  /* ---------- PANEL DE ESCALA (solo móvil) ---------- */
+  #mobileScalePanel {
+    position: absolute; top: 56px; right: 16px; z-index: 3;
+    width: 190px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px;
+    display: none;
+  }
+  #mobileScalePanel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 8px; }
+  #mobileScalePanel input[type=range] { width: 100%; accent-color: var(--accent); }
+
   /* ---------- MÓVIL ---------- */
   @media (max-width: 720px) {
     #topbar { padding: 10px 14px; }
     #topbar h1 { font-size: 13px; }
     #hint { display: none; }
     #readout { top: 40px; left: 14px; font-size: 11px; }
-    #actionbar { bottom: 52px; padding: 6px; gap: 6px; border-radius: 12px; }
-    #actionbar button { font-size: 12px; padding: 8px 10px; }
     #stepper { gap: 14px; padding: 12px 0; }
     .step-label { font-size: 10px; }
     #tracePanel { top: auto; bottom: 150px; right: 12px; left: 12px; width: auto; }
+    #mobileScalePanel { top: auto; bottom: 150px; right: 12px; left: 12px; width: auto; }
+
+    /* El actionbar se vuelve un panel lateral colapsable "hacia un costado". */
+    #actionbarWrap {
+      position: absolute; bottom: 56px; right: 0; left: auto; transform: none; z-index: 3;
+      display: flex; align-items: center; gap: 6px;
+      transition: transform .25s ease;
+    }
+    #actionbarWrap.collapsed { transform: translateX(100%); }
+    #actionbarToggle {
+      width: 30px; height: 40px; flex: none; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 8px 0 0 8px; color: var(--text); font-size: 15px; cursor: pointer;
+    }
+    #actionbar {
+      position: static; transform: none; bottom: auto; left: auto;
+      flex-direction: column; flex-wrap: nowrap;
+      border-radius: 0 10px 10px 0; padding: 8px;
+      max-width: 44vw;
+    }
+    #actionbar button { font-size: 12px; padding: 8px 10px; white-space: nowrap; }
+  }
+  @media (min-width: 721px) {
+    #actionbarToggle { display: none; }
   }
 </style>
 </head>
@@ -246,13 +321,22 @@
     </div>
   </div>
 
-  <div id="actionbar">
-    <button id="btnTrace">Calcar imagen</button>
-    <button id="btnSmooth" disabled>Suavizar trazo</button>
-    <button id="btnHole" disabled>Agregar agujero interno</button>
-    <button id="btnNodeEdit" disabled>Editar nodos</button>
-    <button id="btnReset" class="danger">Reiniciar</button>
-    <button id="btnAccept" class="primary" disabled>Aceptar diseño</button>
+  <div id="mobileScalePanel">
+    <h2>Escala del motivo</h2>
+    <div class="slider-label"><span>Tamaño</span><span id="mobileScaleVal">100%</span></div>
+    <input id="mobileScaleSlider" type="range" min="30" max="250" value="100">
+  </div>
+
+  <div id="actionbarWrap">
+    <button id="actionbarToggle" type="button" aria-label="Mostrar u ocultar controles">‹</button>
+    <div id="actionbar">
+      <button id="btnTrace">Calcar imagen</button>
+      <button id="btnSmooth" disabled>Suavizar trazo</button>
+      <button id="btnHole" disabled>Agregar agujero interno</button>
+      <button id="btnNodeEdit" disabled>Editar nodos</button>
+      <button id="btnReset" class="danger">Reiniciar</button>
+      <button id="btnAccept" class="primary" disabled>Aceptar diseño</button>
+    </div>
   </div>
 
   <div id="stepper">
@@ -279,15 +363,34 @@
     <div class="card">
       <h2>Biblioteca de motivos</h2>
       <p class="subtitle">Elige un motivo. Podrás editar sus nodos, suavizarlo o agregarle un agujero antes de aceptar.</p>
+      <input type="text" id="catalogSearch" placeholder="Buscar por etiqueta…">
       <div id="catalogGrid"></div>
       <div id="catalogStatus">Cargando motivos…</div>
       <div class="row"><button id="btnCatalogClose">Cerrar</button></div>
     </div>
   </div>
+
+  <div id="termsGate">
+    <div class="card">
+      <h2>Antes de empezar</h2>
+      <p>Diseñar tus Topitos implica aceptar nuestras condiciones comerciales (tiempos de entrega, pagos y garantía).</p>
+      <label>
+        <input type="checkbox" id="termsCheckbox">
+        <span>He leído y acepto los <a href="https://www.evoquehaus.com/terminos-y-condiciones" target="_blank" rel="noopener">términos y condiciones</a>.</span>
+      </label>
+      <div class="row"><button id="btnTermsAccept" class="primary" disabled style="width:100%;">Aceptar y continuar</button></div>
+    </div>
+  </div>
+
+  <div id="loadingOverlay">
+    <div class="spinner" id="loadingSpinner"></div>
+    <div class="msg" id="loadingMsg">Cargando…</div>
+  </div>
 </div>
 
 <input type="file" id="traceInput" accept="image/*" hidden>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-full.min.js"></script>
 <script>
 /* ============================================================
@@ -303,9 +406,86 @@ const MIN_BRIDGE_MM = 1;
 const MIN_ZOOM = 8;
 const MAX_ZOOM = 400;
 
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxArX20K1WkToJ_TIqyaV9A4EtZFnU03tgeQ6syyZJJvEmoC6cQ0vUsp-hHnvy2YsGf/exec';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbykvCdd_wcjMbTkHFO783FHj1VIIqv_hlAlDSfkwkKdNu-t79KdyNa0OkZeB0RdGgEJ/exec';
 const DESIGN_KEY = 'topitos-design';
 const TRACE_KEY = 'topitos-trace';
+const TERMS_KEY = 'topitos-terms-accepted';
+const $ = id => document.getElementById(id);
+
+// Un solo punto de verdad para "es móvil": mismo criterio que el breakpoint CSS,
+// y que además exige puntero grueso (para no tratar una laptop angosta como celular).
+const isMobile = window.matchMedia('(max-width: 720px)').matches && window.matchMedia('(pointer: coarse)').matches;
+const mobileScalePanel = $('mobileScalePanel');
+const mobileScaleSlider = $('mobileScaleSlider');
+let mobileScaleFactor = 1;
+
+/* ============================================================
+   OVERLAY DE CARGA — evita que el usuario insista con más clics
+   mientras algo tarda (config del spreadsheet, catálogo, DXF).
+   ============================================================ */
+const LOADING_LOTTIE_JSON = {
+  v: '5.9.0', fr: 30, ip: 0, op: 90, w: 200, h: 200, nm: 'spinner', ddd: 0, assets: [],
+  layers: [{
+    ddd: 0, ind: 1, ty: 4, nm: 'ring', sr: 1,
+    ks: {
+      o: { a: 0, k: 100 },
+      r: { a: 1, k: [{ t: 0, s: [0] }, { t: 90, s: [360] }] },
+      p: { a: 0, k: [100, 100, 0] },
+      a: { a: 0, k: [0, 0, 0] },
+      s: { a: 0, k: [100, 100, 100] },
+    },
+    ao: 0,
+    shapes: [{
+      ty: 'gr',
+      it: [
+        { ty: 'el', p: { a: 0, k: [0, 0] }, s: { a: 0, k: [130, 130] } },
+        {
+          ty: 'st', c: { a: 0, k: [1, 1, 1, 1] }, o: { a: 0, k: 100 }, w: { a: 0, k: 8 }, lc: 2,
+          d: [{ n: 'd', nm: 'dash', v: { a: 0, k: 160 } }, { n: 'g', nm: 'gap', v: { a: 0, k: 130 } }],
+        },
+        { ty: 'tr', p: { a: 0, k: [0, 0] }, a: { a: 0, k: [0, 0] }, s: { a: 0, k: [100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } },
+      ],
+    }],
+    ip: 0, op: 90, st: 0, bm: 0,
+  }],
+};
+
+let loadingCount = 0;
+let loadingAnim = null;
+function showLoading(message) {
+  loadingCount++;
+  const overlay = $('loadingOverlay');
+  $('loadingMsg').textContent = message || 'Cargando…';
+  overlay.style.display = 'flex';
+  if (!loadingAnim && window.lottie) {
+    loadingAnim = lottie.loadAnimation({
+      container: $('loadingSpinner'), renderer: 'svg', loop: true, autoplay: true,
+      animationData: LOADING_LOTTIE_JSON,
+    });
+  }
+}
+function hideLoading() {
+  loadingCount = Math.max(0, loadingCount - 1);
+  if (loadingCount === 0) $('loadingOverlay').style.display = 'none';
+}
+
+/* ============================================================
+   TÉRMINOS Y CONDICIONES — compuerta antes de tocar el editor.
+   ============================================================ */
+(function setupTermsGate() {
+  const gate = $('termsGate');
+  let accepted = false;
+  try { accepted = sessionStorage.getItem(TERMS_KEY) === '1'; } catch (e) {}
+  if (accepted) { gate.style.display = 'none'; return; }
+
+  const checkbox = $('termsCheckbox');
+  const btn = $('btnTermsAccept');
+  checkbox.addEventListener('change', () => { btn.disabled = !checkbox.checked; });
+  btn.addEventListener('click', () => {
+    try { sessionStorage.setItem(TERMS_KEY, '1'); } catch (e) {}
+    gate.style.display = 'none';
+  });
+})();
 
 paper.setup('canvas');
 
@@ -364,7 +544,6 @@ let traceLocked = false;
 let traceState = { x: SQUARE_MM / 2, y: SQUARE_MM / 2, scale: 1, rotation: 0, opacity: 0.35 };
 let traceSrc = null;
 
-const $ = id => document.getElementById(id);
 const readout = $('readout');
 const warning = $('warning');
 const btnTrace = $('btnTrace');
@@ -662,6 +841,7 @@ function resetAll() {
   btnNodeEdit.textContent = 'Editar nodos';
   canvasEl.style.cursor = 'crosshair';
   try { sessionStorage.removeItem(DESIGN_KEY); } catch (e) {}
+  if (isMobile) mobileScalePanel.style.display = 'none';
   revalidateBridge();
 }
 
@@ -800,13 +980,20 @@ function loadConfig() {
 async function applyConfig() {
   const data = await loadConfig();
 
-  if (typeof data.color === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(data.color)) {
-    document.documentElement.style.setProperty('--bg', data.color);
+  // En móvil, la hoja "background" tiene una segunda fila (A2/B2/C2) pensada
+  // para pantallas angostas; si no está diligenciada, se cae a la de escritorio.
+  const mobileCfg = (isMobile && data.mobile) || {};
+  const image = mobileCfg.image || data.image;
+  const scale = mobileCfg.scale || data.scale;
+  const color = mobileCfg.color || data.color;
+
+  if (typeof color === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color)) {
+    document.documentElement.style.setProperty('--bg', color);
   }
-  if (data.image) {
-    bgImage.src = normalizeImageUrl(data.image);
-    const scale = Math.min(100, Math.max(10, Number(data.scale) || 100));
-    bgImage.style.width = scale + '%';
+  if (image) {
+    bgImage.src = normalizeImageUrl(image);
+    const scaleNum = Math.min(100, Math.max(10, Number(scale) || 100));
+    bgImage.style.width = scaleNum + '%';
     bgImage.style.height = 'auto';
   }
   if (Array.isArray(data.catalog)) {
@@ -986,6 +1173,7 @@ fileInput.addEventListener('change', async (event) => {
   if (!file) return;
   const ext = file.name.split('.').pop().toLowerCase();
   setImportStatus('Cargando…', false);
+  showLoading('Procesando archivo…');
 
   try {
     if (ext === 'svg') {
@@ -1004,6 +1192,7 @@ fileInput.addEventListener('change', async (event) => {
     console.error(err);
     setImportStatus('No se pudo leer el archivo: ' + err.message, true);
   } finally {
+    hideLoading();
     fileInput.value = '';
   }
 });
@@ -1084,6 +1273,12 @@ function adoptImportedItem(item) {
     mode = 'review-hole';
   }
   enterReviewOuter('Trazo cargado. Suavízalo, edita nodos o agrégale un agujero antes de aceptar.');
+  if (isMobile) {
+    mobileScaleFactor = 1;
+    mobileScaleSlider.value = 100;
+    $('mobileScaleVal').textContent = '100%';
+    mobileScalePanel.style.display = 'block';
+  }
 }
 
 /* Un SVG de línea (fill="none" + stroke) no se puede extruir: un trazo sin
@@ -1162,19 +1357,35 @@ async function openCatalog() {
   catalogScreen.style.display = 'flex';
   if (!catalogItems.length) {
     setCatalogStatus('Cargando motivos…', false);
+    showLoading('Cargando biblioteca de motivos…');
     await applyConfig();
+    hideLoading();
   }
   renderCatalog();
 }
 
-function renderCatalog() {
+/* Buscador con coincidencia por prefijo: "flor" encuentra las etiquetas
+   "flor", "florero", pero no "girasol". Basta con que UNA etiqueta del
+   motivo empiece por lo escrito. */
+$('catalogSearch').addEventListener('input', (e) => renderCatalog(e.target.value));
+
+function renderCatalog(query) {
   catalogGrid.innerHTML = '';
   if (!catalogItems.length) {
     setCatalogStatus('Todavía no hay motivos en la biblioteca. Agrégalos en la hoja "SVG CATALOG".', false);
     return;
   }
+  const q = (query || '').trim().toLowerCase();
+  const items = q
+    ? catalogItems.filter(it => Array.isArray(it.tags) && it.tags.some(tag => tag.startsWith(q)))
+    : catalogItems;
+
+  if (!items.length) {
+    setCatalogStatus('No hay motivos con esa etiqueta.', false);
+    return;
+  }
   setCatalogStatus('', false);
-  catalogItems.forEach((item, i) => {
+  items.forEach((item, i) => {
     const btn = document.createElement('button');
     btn.className = 'motif';
     btn.type = 'button';
@@ -1217,6 +1428,7 @@ async function fetchMotifSVG(url) {
 
 async function chooseMotif(item, i) {
   setCatalogStatus('Cargando motivo…', false);
+  showLoading('Cargando motivo…');
   try {
     const svgText = await fetchMotifSVG(item.svg);
     importSVGDesign(svgText);
@@ -1225,8 +1437,44 @@ async function chooseMotif(item, i) {
   } catch (err) {
     console.error(err);
     setCatalogStatus('No se pudo cargar ese motivo: ' + err.message, true);
+  } finally {
+    hideLoading();
   }
 }
+
+/* ============================================================
+   RESTRICCIONES EN MÓVIL — personalizar con archivo propio o a
+   mano queda solo para escritorio; desde el celular únicamente
+   se elige un motivo de la biblioteca y se ajusta su escala.
+   ============================================================ */
+if (isMobile) {
+  $('btnUpload').style.display = 'none';
+  $('btnSkipImport').style.display = 'none';
+  const importP = document.querySelector('#importScreen p');
+  if (importP) importP.textContent = 'Elige un motivo de la biblioteca. Desde el celular solo puedes ajustar su escala — para subir tu propio archivo o dibujar a mano, entra desde un computador.';
+
+  [btnTrace, btnSmooth, btnHole, btnNodeEdit].forEach((b) => { b.style.display = 'none'; });
+}
+
+mobileScaleSlider.addEventListener('input', (e) => {
+  if (!outerPath) return;
+  const percent = Number(e.target.value);
+  const relative = (percent / 100) / mobileScaleFactor;
+  const center = new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2);
+  outerPath.scale(relative, center);
+  if (holePath) holePath.scale(relative, center);
+  mobileScaleFactor = percent / 100;
+  $('mobileScaleVal').textContent = percent + '%';
+  revalidateBridge();
+});
+
+/* ---------- Panel de controles colapsable "hacia un costado" (móvil) ---------- */
+const actionbarWrap = $('actionbarWrap');
+const actionbarToggle = $('actionbarToggle');
+actionbarToggle.addEventListener('click', () => {
+  const collapsed = actionbarWrap.classList.toggle('collapsed');
+  actionbarToggle.textContent = collapsed ? '›' : '‹';
+});
 
 /* ============================================================
    ARRANQUE
