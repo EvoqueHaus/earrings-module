@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Topitos — ¡Gracias por tu pedido!</title>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --panel: #161616;
+    --line: rgba(255,255,255,0.12);
+    --accent: #ffffff;
+    --text: #f5f5f5;
+    --text-dim: #8a8a8a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+  }
+  #app { position: relative; width: 100%; height: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  #bgImage {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 0; pointer-events: none; max-width: none;
+  }
+  .card {
+    position: relative; z-index: 1;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 40px 36px; width: 380px; max-width: calc(100% - 32px);
+    text-align: center;
+  }
+  .check {
+    width: 56px; height: 56px; margin: 0 auto 18px;
+    border-radius: 50%; border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .check svg { width: 26px; height: 26px; }
+  h1 { font-size: 19px; margin: 0 0 10px; }
+  p { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin: 0 0 8px; }
+  .order-note { font-size: 12px; color: var(--text-dim); margin: 18px 0 26px; }
+  a.btn {
+    display: inline-block; text-decoration: none;
+    font-size: 13px; font-weight: 600; color: #0a0a0a;
+    background: var(--accent); border-radius: 8px; padding: 11px 22px;
+  }
+  a.btn:hover { background: #d8d8d8; }
+</style>
+</head>
+<body>
+<div id="app">
+  <img id="bgImage" alt="">
+  <div class="card">
+    <div class="check">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#f5f5f5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    </div>
+    <h1 id="thanksTitle">¡Gracias por tu pedido!</h1>
+    <p>Ya recibimos tus datos y el comprobante de pago. Vamos a confirmar todo y te escribimos por WhatsApp para coordinar los detalles.</p>
+    <div class="order-note">Si tienes alguna duda mientras tanto, también puedes escribirnos directamente.</div>
+    <a class="btn" href="index.html">Diseñar otro Topito</a>
+  </div>
+</div>
+
+<script>
+  // Saludo personalizado si venimos justo de confirmar un pedido.
+  try {
+    const raw = sessionStorage.getItem('topitos-thanks');
+    const data = raw ? JSON.parse(raw) : null;
+    if (data && data.firstName) {
+      document.getElementById('thanksTitle').textContent = '¡Gracias, ' + data.firstName + '!';
+    }
+    sessionStorage.removeItem('topitos-thanks');
+  } catch (e) {}
+
+  // Mismo fondo que el resto de la app (Background, con variante móvil A2/B2/C2).
+  const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxArX20K1WkToJ_TIqyaV9A4EtZFnU03tgeQ6syyZJJvEmoC6cQ0vUsp-hHnvy2YsGf/exec';
+  const isMobile = window.matchMedia('(max-width: 720px)').matches && window.matchMedia('(pointer: coarse)').matches;
+
+  function normalizeImageUrl(url) {
+    if (typeof url !== 'string') return '';
+    const m = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:[^#]*&)?id=|thumbnail\?(?:[^#]*&)?id=)([\w-]{20,})/);
+    if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1200';
+    return url;
+  }
+
+  fetch(CONFIG_URL).then(r => r.json()).then((data) => {
+    const mobileCfg = (isMobile && data.mobile) || {};
+    const image = mobileCfg.image || data.image;
+    const scale = mobileCfg.scale || data.scale;
+    const color = mobileCfg.color || data.color;
+
+    if (typeof color === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color)) {
+      document.documentElement.style.setProperty('--bg', color);
+    }
+    if (image) {
+      const img = document.getElementById('bgImage');
+      img.src = normalizeImageUrl(image);
+      const scaleNum = Math.min(100, Math.max(10, Number(scale) || 100));
+      img.style.width = scaleNum + '%';
+      img.style.height = 'auto';
+    }
+  }).catch(() => { /* si falla, se queda con el fondo por defecto */ });
+</script>
+</body>
+</html>
