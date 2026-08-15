@@ -22,6 +22,15 @@
   }
   #app { position: relative; width: 100%; height: 100%; overflow: hidden; }
   canvas { position: absolute; top: 0; left: 0; z-index: 1; display: block; touch-action: none; }
+  #labelLayer { position: absolute; top: 0; left: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+  .dim-label {
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 11px; color: var(--text);
+    background: rgba(10,10,10,0.6);
+    border: 1px solid var(--line);
+    padding: 2px 6px; border-radius: 4px;
+    white-space: nowrap; pointer-events: none;
+  }
   #bgImage {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
     z-index: 0; pointer-events: none; max-width: none;
@@ -137,12 +146,13 @@
     display: block; font-size: 11px; color: var(--text-dim);
     text-transform: uppercase; letter-spacing: 0.03em; margin: 14px 0 6px;
   }
-  #orderModal input, #orderModal select {
+  #orderModal input, #orderModal select, #orderModal textarea {
     width: 100%; font-family: inherit; font-size: 13px;
     background: rgba(255,255,255,0.04); color: var(--text);
     border: 1px solid var(--line); border-radius: 7px; padding: 9px 10px;
   }
-  #orderModal input:focus, #orderModal select:focus { outline: 1px solid var(--accent); }
+  #orderModal textarea { resize: vertical; min-height: 60px; }
+  #orderModal input:focus, #orderModal select:focus, #orderModal textarea:focus { outline: 1px solid var(--accent); }
   .whatsapp-row { display: grid; grid-template-columns: 130px 1fr; gap: 8px; }
   .whatsapp-row label { grid-column: 1 / -1; }
 
@@ -169,6 +179,25 @@
   #orderModal .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
   #orderModal .row button { font-family: inherit; font-size: 13px; padding: 10px 16px; border-radius: 7px; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; }
 
+  /* ---------- OVERLAY DE CARGA (Lottie) ---------- */
+  #loadingOverlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(10,10,10,0.78);
+    display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 14px;
+  }
+  #loadingOverlay .spinner { width: 84px; height: 84px; }
+  #loadingOverlay .msg { font-size: 12px; color: var(--text-dim); letter-spacing: 0.02em; }
+
+  /* ---------- ENTREGA ---------- */
+  .delivery-row { display: flex; gap: 8px; }
+  .delivery-opt {
+    flex: 1; font-family: inherit; font-size: 12px; padding: 9px 8px;
+    border-radius: 7px; border: 1px solid var(--line); background: rgba(255,255,255,0.03);
+    color: var(--text); cursor: pointer; text-align: center;
+  }
+  .delivery-opt.active { border-color: var(--accent); color: var(--accent); }
+
   @media (max-width: 720px) {
     #topbar { padding: 10px 14px; }
     #topbar h1 { font-size: 13px; }
@@ -185,6 +214,7 @@
 <div id="app">
   <img id="bgImage" alt="">
   <canvas id="canvas"></canvas>
+  <div id="labelLayer"></div>
 
   <div id="topbar">
     <h1>Topitos — vista 3D</h1>
@@ -268,6 +298,16 @@
         <label for="ofReceipt">Comprobante de pago</label>
         <input id="ofReceipt" type="file" accept="image/*" required>
 
+        <label>¿Cómo prefieres recibirlo?</label>
+        <div class="delivery-row">
+          <button type="button" class="delivery-opt active" id="btnDeliveryPickup" data-method="recoge">Recoger en tienda</button>
+          <button type="button" class="delivery-opt" id="btnDeliveryShip" data-method="envio">Enviar a domicilio</button>
+        </div>
+        <div id="addressField" style="display:none;">
+          <label for="ofAddress">Dirección de envío</label>
+          <textarea id="ofAddress" placeholder="Dirección completa, ciudad y referencias"></textarea>
+        </div>
+
         <div id="orderStatus"></div>
         <div class="row">
           <button type="button" id="btnOrderCancel">Cancelar</button>
@@ -276,8 +316,14 @@
       </form>
     </div>
   </div>
+
+  <div id="loadingOverlay">
+    <div class="spinner" id="loadingSpinner"></div>
+    <div class="msg" id="loadingMsg">Cargando…</div>
+  </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
 <script type="importmap">
 {
   "imports": {
@@ -292,6 +338,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
 /* ============================================================
    1. DISEÑO — llega desde el editor (paso 2) vía sessionStorage.
@@ -301,6 +348,59 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 const DESIGN_KEY = 'topitos-design';
 const VIEW_KEY = 'topitos-3d';
 const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxArX20K1WkToJ_TIqyaV9A4EtZFnU03tgeQ6syyZJJvEmoC6cQ0vUsp-hHnvy2YsGf/exec';
+
+const isMobile = window.matchMedia('(max-width: 720px)').matches && window.matchMedia('(pointer: coarse)').matches;
+
+/* ============================================================
+   OVERLAY DE CARGA — mismo patrón que index.html: evita que el
+   usuario insista con más clics mientras algo tarda.
+   ============================================================ */
+const LOADING_LOTTIE_JSON = {
+  v: '5.9.0', fr: 30, ip: 0, op: 90, w: 200, h: 200, nm: 'spinner', ddd: 0, assets: [],
+  layers: [{
+    ddd: 0, ind: 1, ty: 4, nm: 'ring', sr: 1,
+    ks: {
+      o: { a: 0, k: 100 },
+      r: { a: 1, k: [{ t: 0, s: [0] }, { t: 90, s: [360] }] },
+      p: { a: 0, k: [100, 100, 0] },
+      a: { a: 0, k: [0, 0, 0] },
+      s: { a: 0, k: [100, 100, 100] },
+    },
+    ao: 0,
+    shapes: [{
+      ty: 'gr',
+      it: [
+        { ty: 'el', p: { a: 0, k: [0, 0] }, s: { a: 0, k: [130, 130] } },
+        {
+          ty: 'st', c: { a: 0, k: [1, 1, 1, 1] }, o: { a: 0, k: 100 }, w: { a: 0, k: 8 }, lc: 2,
+          d: [{ n: 'd', nm: 'dash', v: { a: 0, k: 160 } }, { n: 'g', nm: 'gap', v: { a: 0, k: 130 } }],
+        },
+        { ty: 'tr', p: { a: 0, k: [0, 0] }, a: { a: 0, k: [0, 0] }, s: { a: 0, k: [100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } },
+      ],
+    }],
+    ip: 0, op: 90, st: 0, bm: 0,
+  }],
+};
+
+let loadingCount = 0;
+let loadingAnim = null;
+function showLoading(message) {
+  loadingCount++;
+  const overlay = document.getElementById('loadingOverlay');
+  document.getElementById('loadingMsg').textContent = message || 'Cargando…';
+  overlay.style.display = 'flex';
+  if (!loadingAnim && window.lottie) {
+    loadingAnim = lottie.loadAnimation({
+      container: document.getElementById('loadingSpinner'), renderer: 'svg', loop: true, autoplay: true,
+      animationData: LOADING_LOTTIE_JSON,
+    });
+  }
+}
+function hideLoading() {
+  loadingCount = Math.max(0, loadingCount - 1);
+  if (loadingCount === 0) document.getElementById('loadingOverlay').style.display = 'none';
+}
+showLoading('Cargando tu diseño…');
 
 const PIECE_DEPTH_MM = 0.8;
 const STEM_LENGTH_MM = 10;
@@ -374,7 +474,16 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  labelRenderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+/* Renderer aparte para las etiquetas de texto de las cotas: son HTML real
+   (nítido a cualquier zoom) posicionado por Three.js en cada frame según la
+   posición 3D del punto al que está anclada — por eso "orbitan" junto con
+   la pieza cuando el usuario mueve la cámara. */
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(window.innerWidth, window.innerHeight);
+document.getElementById('labelLayer').appendChild(labelRenderer.domElement);
 
 /* ============================================================
    3. ACABADOS — 4 combinaciones plata/oro × mate/brillante,
@@ -496,6 +605,43 @@ const B = buildEarring();
 holderA.add(A.group);
 holderB.add(B.group);
 const stemA = A.stem;
+
+/* ---------- Cotas flotantes ----------
+   Se anclan como hijas de A.pieceHolder, así que heredan exactamente la
+   misma posición/rotación que la pieza (giro, vástago movido, etc.) — al
+   orbitar la cámara, o al mover/rotar el diseño, las cotas se mueven con
+   él en vez de quedar fijas en la pantalla. Se muestran solo en el arete
+   izquierdo para no duplicar el mismo dato dos veces en pantalla. */
+function addDimensionLine(parent, from, to, text) {
+  const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+  const geometry = new THREE.BufferGeometry().setFromPoints([from, to]);
+  parent.add(new THREE.Line(geometry, lineMat));
+
+  const div = document.createElement('div');
+  div.className = 'dim-label';
+  div.textContent = text;
+  const label = new CSS2DObject(div);
+  label.position.copy(from.clone().add(to).multiplyScalar(0.5));
+  parent.add(label);
+}
+
+const dimGroup = new THREE.Group();
+const dimMargin = Math.max(pieceSize.x, pieceSize.y) * 0.2 + 0.7;
+const halfX = pieceSize.x / 2, halfY = pieceSize.y / 2, halfZ = pieceSize.z / 2;
+
+addDimensionLine(
+  dimGroup,
+  new THREE.Vector3(-halfX, -halfY - dimMargin, halfZ),
+  new THREE.Vector3(halfX, -halfY - dimMargin, halfZ),
+  pieceSize.x.toFixed(1) + 'mm'
+);
+addDimensionLine(
+  dimGroup,
+  new THREE.Vector3(-halfX - dimMargin, -halfY, halfZ),
+  new THREE.Vector3(-halfX - dimMargin, halfY, halfZ),
+  pieceSize.y.toFixed(1) + 'mm'
+);
+A.pieceHolder.add(dimGroup);
 
 /* ---------- Estado compartido por los dos aretes ----------
    stemPos/stemQuat: dónde está y cómo está inclinado el poste.
@@ -644,14 +790,20 @@ async function loadConfig() {
     const res = await fetch(CONFIG_URL);
     const data = await res.json();
 
-    if (typeof data.color === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(data.color)) {
-      document.documentElement.style.setProperty('--bg', data.color);
+    // Misma variante móvil que index.html: Background A2/B2/C2 si existe.
+    const mobileCfg = (isMobile && data.mobile) || {};
+    const image = mobileCfg.image || data.image;
+    const scale = mobileCfg.scale || data.scale;
+    const color = mobileCfg.color || data.color;
+
+    if (typeof color === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color)) {
+      document.documentElement.style.setProperty('--bg', color);
     }
-    if (data.image) {
+    if (image) {
       const img = document.getElementById('bgImage');
-      img.src = normalizeImageUrl(data.image);
-      const scale = Math.min(100, Math.max(10, Number(data.scale) || 100));
-      img.style.width = scale + '%';
+      img.src = normalizeImageUrl(image);
+      const scaleNum = Math.min(100, Math.max(10, Number(scale) || 100));
+      img.style.width = scaleNum + '%';
       img.style.height = 'auto';
     }
     if (data.pricing) {
@@ -667,6 +819,7 @@ async function loadConfig() {
     console.error('No se pudo cargar el fondo/precios desde el spreadsheet:', err);
   } finally {
     updatePrice();
+    hideLoading();
   }
 }
 loadConfig();
@@ -784,6 +937,23 @@ document.getElementById('btnConfirm').addEventListener('click', () => {
 });
 document.getElementById('btnOrderCancel').addEventListener('click', () => { orderModal.style.display = 'none'; });
 
+/* ---------- Entrega: recoger en tienda o enviar a domicilio ---------- */
+let deliveryMethod = 'recoge';
+const btnDeliveryPickup = document.getElementById('btnDeliveryPickup');
+const btnDeliveryShip = document.getElementById('btnDeliveryShip');
+const addressField = document.getElementById('addressField');
+const ofAddress = document.getElementById('ofAddress');
+
+function setDeliveryMethod(method) {
+  deliveryMethod = method;
+  btnDeliveryPickup.classList.toggle('active', method === 'recoge');
+  btnDeliveryShip.classList.toggle('active', method === 'envio');
+  addressField.style.display = method === 'envio' ? 'block' : 'none';
+  ofAddress.required = method === 'envio';
+}
+btnDeliveryPickup.addEventListener('click', () => setDeliveryMethod('recoge'));
+btnDeliveryShip.addEventListener('click', () => setDeliveryMethod('envio'));
+
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -798,9 +968,14 @@ orderForm.addEventListener('submit', async (event) => {
   const file = document.getElementById('ofReceipt').files[0];
   if (!file) { setOrderStatus('Adjunta el comprobante de pago.', 'error'); return; }
   if (file.size > 8 * 1024 * 1024) { setOrderStatus('La imagen pesa más de 8MB. Sube una más liviana.', 'error'); return; }
+  if (deliveryMethod === 'envio' && !ofAddress.value.trim()) {
+    setOrderStatus('Escribe la dirección de envío.', 'error');
+    return;
+  }
 
   btnOrderSubmit.disabled = true;
   setOrderStatus('Enviando…', null);
+  showLoading('Enviando tu pedido…');
 
   try {
     const receiptBase64 = await fileToBase64(file);
@@ -824,6 +999,8 @@ orderForm.addEventListener('submit', async (event) => {
       stemPosition: { x: +stemPos.x.toFixed(3), y: +stemPos.y.toFixed(3), z: +stemPos.z.toFixed(3) },
       outerSVG: design.outerSVG,
       holeSVG: design.holeSVG || '',
+      deliveryMethod,
+      address: deliveryMethod === 'envio' ? ofAddress.value.trim() : '',
       receiptBase64,
       receiptFileName: file.name,
       receiptMimeType: file.type || 'image/jpeg',
@@ -836,11 +1013,19 @@ orderForm.addEventListener('submit', async (event) => {
     const result = await res.json();
     if (!result.ok) throw new Error(result.error || 'error desconocido en el servidor');
 
-    setOrderStatus('Pedido enviado. Te contactaremos por WhatsApp.', 'success');
-    setTimeout(() => { orderModal.style.display = 'none'; }, 1800);
+    // El nombre viaja a la página de agradecimiento para el saludo personalizado.
+    try { sessionStorage.setItem('topitos-thanks', JSON.stringify({ firstName: payload.firstName })); } catch (e) {}
+    try {
+      sessionStorage.removeItem(DESIGN_KEY);
+      sessionStorage.removeItem(VIEW_KEY);
+      sessionStorage.removeItem('topitos-trace');
+    } catch (e) {}
+
+    window.location.href = 'gracias.html';
   } catch (err) {
     console.error(err);
     setOrderStatus('No se pudo enviar el pedido: ' + err.message, 'error');
+    hideLoading();
   } finally {
     btnOrderSubmit.disabled = false;
   }
@@ -853,6 +1038,7 @@ function animate() {
   requestAnimationFrame(animate);
   controls.update();
   renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
 }
 animate();
 </script>
