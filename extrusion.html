@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<link rel="icon" type="image/jpeg" href="https://res.cloudinary.com/dtpxoihkf/image/upload/v1786830126/EVOQUE_HAUS_FAVICON_ijlska.jpg">
 <title>Topitos — Extrusión 3D</title>
 <style>
   :root {
@@ -237,7 +238,7 @@
 
       <div class="block">
         <h2>Simetría</h2>
-        <button id="btnFlip" class="panel-btn" type="button">Voltear el par</button>
+        <button id="btnFlip" class="panel-btn" type="button">Voltear un lado</button>
       </div>
 
       <div class="block">
@@ -347,7 +348,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
    ============================================================ */
 const DESIGN_KEY = 'topitos-design';
 const VIEW_KEY = 'topitos-3d';
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbykvCdd_wcjMbTkHFO783FHj1VIIqv_hlAlDSfkwkKdNu-t79KdyNa0OkZeB0RdGgEJ/exec';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxgW2C8l0s_xyPiakREXFxF2C6a0iWJw9amjQstaJuRIbieVPx25Aojf3ZaxbbwMQF-/exec';
 
 const isMobile = window.matchMedia('(max-width: 720px)').matches && window.matchMedia('(pointer: coarse)').matches;
 
@@ -431,7 +432,7 @@ try {
 function saveViewState() {
   viewState.finish = currentFinishKey;
   viewState.rotationDeg = rotationDeg;
-  viewState.flip = flip;
+  viewState.flip = flipB;
   viewState.stem = { x: stemPos.x, y: stemPos.y, z: stemPos.z };
   viewState.anchor = { x: pieceAnchor.x, y: pieceAnchor.y, z: pieceAnchor.z };
   try { sessionStorage.setItem(VIEW_KEY, JSON.stringify(viewState)); } catch (e) {}
@@ -690,13 +691,14 @@ function onStemMoved() {
   applyState();
 }
 
-/* "Voltear" invierte el eje de simetría del par. Como la rotación vive dentro
-   del grupo espejado, el reflejo sale correcto sin invertir el ángulo. */
-let flip = viewState.flip === -1 ? -1 : 1;
+/* "Voltear" ahora solo afecta al arete B (el derecho); A se queda siempre
+   en su orientación base. Por defecto B nace espejado (-1) para formar el
+   par estándar; el botón alterna B entre espejado y no espejado. */
+let flipB = viewState.flip === 1 ? 1 : -1;
 
 function applyPairTransform() {
-  A.group.scale.x = flip;
-  B.group.scale.x = -flip;
+  A.group.scale.x = 1;
+  B.group.scale.x = flipB;
   applyState();
 }
 applyPairTransform();
@@ -739,7 +741,7 @@ window.addEventListener('keydown', (e) => {
 
 /* ---------- Voltear y rotar ---------- */
 document.getElementById('btnFlip').addEventListener('click', () => {
-  flip = -flip;
+  flipB = -flipB;
   applyPairTransform();
 });
 
@@ -995,7 +997,7 @@ orderForm.addEventListener('submit', async (event) => {
       unitPrice: unit,
       estimatedPrice: unit * UNITS_PER_PAIR,
       rotationDeg,
-      mirrored: flip === 1 ? 'estándar' : 'volteado',
+      mirrored: flipB === -1 ? 'estándar' : 'volteado (arete derecho)',
       stemPosition: { x: +stemPos.x.toFixed(3), y: +stemPos.y.toFixed(3), z: +stemPos.z.toFixed(3) },
       outerSVG: design.outerSVG,
       holeSVG: design.holeSVG || '',
