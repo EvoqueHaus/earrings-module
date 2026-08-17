@@ -343,6 +343,10 @@
     <h2>Escala del motivo</h2>
     <div class="slider-label"><span>Tamaño</span><span id="mobileScaleVal">100%</span></div>
     <input id="mobileScaleSlider" type="range" min="30" max="250" value="100">
+    <div class="ref-row">
+      <button id="btnMobileBack" class="danger">‹ Otro motivo</button>
+      <button id="btnMobileAdvance" class="primary">Avanzar a 3D ›</button>
+    </div>
   </div>
 
   <div id="actionbarWrap">
@@ -1349,6 +1353,7 @@ function adoptImportedItem(item) {
     mobileScaleSlider.value = 100;
     $('mobileScaleVal').textContent = '100%';
     mobileScalePanel.style.display = 'block';
+    fitView(); // vuelve al encuadre por defecto: cuadrícula + cotas centradas
   }
 }
 
@@ -1537,6 +1542,20 @@ mobileScaleSlider.addEventListener('input', (e) => {
   mobileScaleFactor = percent / 100;
   $('mobileScaleVal').textContent = percent + '%';
   revalidateBridge();
+});
+
+/* Retroceder: vuelve directo a la biblioteca (en móvil es la única fuente de
+   motivos) sin pasar por la pantalla de "¿cómo quieres empezar?". El diseño
+   actual solo se descarta si de verdad elige otro motivo — si cierra la
+   biblioteca sin elegir, sigue con el que tenía. */
+$('btnMobileBack').addEventListener('click', () => {
+  openCatalog();
+});
+
+/* Avanzar: mismo criterio de validación que el paso 3 del stepper. */
+$('btnMobileAdvance').addEventListener('click', () => {
+  if (!outerPath || !outerPath.closed) { flash('Elige un motivo antes de continuar.'); return; }
+  acceptDesign();
 });
 
 /* ---------- Panel de controles colapsable "hacia un costado" (móvil) ---------- */
