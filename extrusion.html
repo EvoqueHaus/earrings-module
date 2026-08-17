@@ -123,8 +123,16 @@
     background: linear-gradient(to top, rgba(28,28,30,0.9), transparent);
     pointer-events: none;
   }
-  .step { display: flex; align-items: center; gap: 8px; opacity: 0.4; }
-  .step.active { opacity: 1; }
+  .step {
+    display: flex; align-items: center; gap: 8px; opacity: 0.4;
+    pointer-events: auto; cursor: pointer;
+    background: none; border: none; padding: 4px; font-family: inherit;
+    color: inherit; appearance: none; -webkit-appearance: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .step:hover, .step:focus-visible { opacity: 0.7; }
+  .step:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+  .step.active { opacity: 1; cursor: default; }
   .step-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); }
   .step.active .step-dot { background: var(--accent); }
   .step-label { font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; }
@@ -265,9 +273,9 @@
   </div>
 
   <div id="stepper">
-    <div class="step"><div class="step-dot"></div><div class="step-label">1 · Importar</div></div>
-    <div class="step"><div class="step-dot"></div><div class="step-label">2 · Dibujar</div></div>
-    <div class="step active"><div class="step-dot"></div><div class="step-label">3 · Extrusión 3D</div></div>
+    <button type="button" class="step" id="stepImport"><div class="step-dot"></div><div class="step-label">1 · Importar</div></button>
+    <button type="button" class="step" id="stepDraw"><div class="step-dot"></div><div class="step-label">2 · Dibujar</div></button>
+    <button type="button" class="step active" id="stepExtrude"><div class="step-dot"></div><div class="step-label">3 · Extrusión 3D</div></button>
   </div>
 
   <div id="orderModal">
@@ -348,7 +356,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
    ============================================================ */
 const DESIGN_KEY = 'topitos-design';
 const VIEW_KEY = 'topitos-3d';
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxgW2C8l0s_xyPiakREXFxF2C6a0iWJw9amjQstaJuRIbieVPx25Aojf3ZaxbbwMQF-/exec';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwHpQClCShIfaBiqcGR1mFdFM01beozZrGOUMLVQcPMO-V-mRzwqpq9yaMUScxfbwpc/exec';
 
 const isMobile = window.matchMedia('(max-width: 720px)').matches && window.matchMedia('(pointer: coarse)').matches;
 
@@ -439,6 +447,17 @@ function saveViewState() {
 }
 window.addEventListener('pagehide', saveViewState);
 document.getElementById('backLink').addEventListener('click', saveViewState);
+
+/* Los pasos 1 y 2 viven en index.html — el stepper de aquí solo permite
+   volver, guardando primero el estado de la vista 3D como hace "← volver". */
+document.getElementById('stepImport').addEventListener('click', () => {
+  saveViewState();
+  window.location.href = 'index.html';
+});
+document.getElementById('stepDraw').addEventListener('click', () => {
+  saveViewState();
+  window.location.href = 'index.html';
+});
 
 /* ============================================================
    2. ESCENA
