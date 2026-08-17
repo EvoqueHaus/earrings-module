@@ -61,6 +61,13 @@
     font-size: 12px; color: var(--text-dim);
     pointer-events: none;
   }
+  #areaNotice {
+    position: absolute; top: 68px; left: 20px; z-index: 2;
+    font-size: 11px; color: var(--text-dim);
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 7px; padding: 6px 10px;
+    pointer-events: none;
+  }
 
   #actionbar {
     position: absolute; bottom: 56px; left: 50%; transform: translateX(-50%); z-index: 3;
@@ -98,7 +105,15 @@
     background: linear-gradient(to top, rgba(28,28,30,0.9), transparent);
     pointer-events: none;
   }
-  .step { display: flex; align-items: center; gap: 8px; opacity: 0.4; }
+  .step {
+    display: flex; align-items: center; gap: 8px; opacity: 0.4;
+    pointer-events: auto; cursor: pointer;
+    background: none; border: none; padding: 4px; font-family: inherit;
+    color: inherit; appearance: none; -webkit-appearance: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .step:hover, .step:focus-visible { opacity: 0.7; }
+  .step:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
   .step.active { opacity: 1; }
   .step-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); }
   .step.active .step-dot { background: var(--accent); }
@@ -240,7 +255,8 @@
     #topbar { padding: 10px 14px; }
     #topbar h1 { font-size: 13px; }
     #hint { display: none; }
-    #readout { top: 40px; left: 14px; font-size: 11px; }
+    #readout { top: 40px; left: 14px; font-size: 11px; max-width: calc(100% - 28px); }
+    #areaNotice { top: 76px; left: 14px; }
     #stepper { gap: 14px; padding: 12px 0; }
     .step-label { font-size: 10px; }
     #tracePanel { top: auto; bottom: 150px; right: 12px; left: 12px; width: auto; }
@@ -301,6 +317,7 @@
   </div>
 
   <div id="readout"></div>
+  <div id="areaNotice">Área máxima de trabajo: 10 × 10&nbsp;mm</div>
   <div id="warning">El puente entre el agujero y el borde es menor a 1&nbsp;mm — ajusta el agujero para continuar.</div>
 
   <div id="tracePanel">
@@ -341,9 +358,9 @@
   </div>
 
   <div id="stepper">
-    <div class="step active" id="stepImport"><div class="step-dot"></div><div class="step-label">1 · Importar</div></div>
-    <div class="step" id="stepDraw"><div class="step-dot"></div><div class="step-label">2 · Dibujar</div></div>
-    <div class="step"><div class="step-dot"></div><div class="step-label">3 · Extrusión 3D</div></div>
+    <button type="button" class="step active" id="stepImport"><div class="step-dot"></div><div class="step-label">1 · Importar</div></button>
+    <button type="button" class="step" id="stepDraw"><div class="step-dot"></div><div class="step-label">2 · Dibujar</div></button>
+    <button type="button" class="step" id="stepExtrude"><div class="step-dot"></div><div class="step-label">3 · Extrusión 3D</div></button>
   </div>
 
   <div id="importScreen">
@@ -407,7 +424,7 @@ const MIN_BRIDGE_MM = 1;
 const MIN_ZOOM = 8;
 const MAX_ZOOM = 400;
 
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxgW2C8l0s_xyPiakREXFxF2C6a0iWJw9amjQstaJuRIbieVPx25Aojf3ZaxbbwMQF-/exec';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwHpQClCShIfaBiqcGR1mFdFM01beozZrGOUMLVQcPMO-V-mRzwqpq9yaMUScxfbwpc/exec';
 const DESIGN_KEY = 'topitos-design';
 const TRACE_KEY = 'topitos-trace';
 const TERMS_KEY = 'topitos-terms-accepted';
@@ -495,8 +512,8 @@ paper.setup('canvas');
    el teclado o cambiaba la orientación. El atributo resize del canvas ya
    mantiene la vista correcta al cambiar de tamaño. */
 function fitView() {
-  const targetPx = paper.view.viewSize.height * 0.7;
-  paper.view.zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, targetPx / SQUARE_MM));
+  const targetPx = paper.view.viewSize.height * 0.62;
+  paper.view.zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, targetPx / (SQUARE_MM + 4)));
   paper.view.center = new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2);
 }
 fitView();
@@ -518,6 +535,47 @@ function drawGrid() {
   border.strokeColor = '#6a6a6a';
   border.strokeWidth = 1;
   border.strokeScaling = false;
+
+  drawFixedDimensions();
+}
+
+/* Cotas fijas del área de trabajo: siempre 10x10mm, tanto si el usuario dibuja
+   a mano como si importa un archivo o un motivo — es el límite físico real de
+   la pieza, así que se dibuja una sola vez y nunca se borra ni se edita. */
+function drawFixedDimensions() {
+  const dimColor = '#8a8a8a';
+  const margin = 1;
+
+  function tickLine(from, to) {
+    const l = new paper.Path.Line(from, to);
+    l.strokeColor = dimColor;
+    l.strokeWidth = 1;
+    l.strokeScaling = false;
+    return l;
+  }
+
+  function dimLabel(point, text, rotation) {
+    const label = new paper.PointText(point);
+    label.justification = 'center';
+    label.fillColor = dimColor;
+    label.fontFamily = 'SFMono-Regular, Menlo, Consolas, monospace';
+    label.fontSize = 0.55;
+    label.content = text;
+    if (rotation) label.rotate(rotation, point);
+    return label;
+  }
+
+  // Cota inferior — ancho
+  tickLine(new paper.Point(0, SQUARE_MM + margin), new paper.Point(SQUARE_MM, SQUARE_MM + margin));
+  tickLine(new paper.Point(0, SQUARE_MM + margin - 0.3), new paper.Point(0, SQUARE_MM + margin + 0.3));
+  tickLine(new paper.Point(SQUARE_MM, SQUARE_MM + margin - 0.3), new paper.Point(SQUARE_MM, SQUARE_MM + margin + 0.3));
+  dimLabel(new paper.Point(SQUARE_MM / 2, SQUARE_MM + margin + 1), SQUARE_MM + ' mm');
+
+  // Cota izquierda — alto
+  tickLine(new paper.Point(-margin, 0), new paper.Point(-margin, SQUARE_MM));
+  tickLine(new paper.Point(-margin - 0.3, 0), new paper.Point(-margin + 0.3, 0));
+  tickLine(new paper.Point(-margin - 0.3, SQUARE_MM), new paper.Point(-margin + 0.3, SQUARE_MM));
+  dimLabel(new paper.Point(-margin - 1, SQUARE_MM / 2), SQUARE_MM + ' mm', -90);
 }
 drawGrid();
 
@@ -1154,11 +1212,23 @@ const importStatus = $('importStatus');
 const fileInput = $('fileInput');
 const stepImport = $('stepImport');
 const stepDraw = $('stepDraw');
+const stepExtrude = $('stepExtrude');
 
 function closeImportScreen() {
   importScreen.style.display = 'none';
   stepImport.classList.remove('active');
   stepDraw.classList.add('active');
+}
+
+/* Volver al paso 1 sin perder lo ya dibujado: solo reabre la pantalla de
+   inicio. El trazo actual se pierde únicamente si el usuario elige un nuevo
+   archivo o motivo (adoptImportedItem llama resetAll antes de reemplazarlo);
+   si solo cierra la pantalla otra vez, el diseño sigue intacto. */
+function openImportScreen() {
+  catalogScreen.style.display = 'none';
+  importScreen.style.display = 'flex';
+  stepImport.classList.add('active');
+  stepDraw.classList.remove('active');
 }
 
 function setImportStatus(text, isError) {
@@ -1475,6 +1545,21 @@ const actionbarToggle = $('actionbarToggle');
 actionbarToggle.addEventListener('click', () => {
   const collapsed = actionbarWrap.classList.toggle('collapsed');
   actionbarToggle.textContent = collapsed ? '›' : '‹';
+});
+
+/* ---------- Stepper interactivo — volver a un paso anterior ---------- */
+stepImport.addEventListener('click', () => {
+  if (importScreen.style.display !== 'none') return; // ya está abierto
+  openImportScreen();
+});
+stepDraw.addEventListener('click', () => {
+  if (importScreen.style.display === 'none' && catalogScreen.style.display === 'none') return; // ya está aquí
+  catalogScreen.style.display = 'none';
+  closeImportScreen();
+});
+stepExtrude.addEventListener('click', () => {
+  if (!outerPath || !outerPath.closed) { flash('Cierra el contorno antes de pasar a la vista 3D.'); return; }
+  acceptDesign();
 });
 
 /* ============================================================
