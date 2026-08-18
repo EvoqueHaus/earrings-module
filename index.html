@@ -5,6 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <link rel="icon" type="image/jpeg" href="https://res.cloudinary.com/dtpxoihkf/image/upload/v1786830126/EVOQUE_HAUS_FAVICON_ijlska.jpg">
 <title>Topitos — Editor de figura</title>
+<script>
+  /* "Es móvil" se decide una sola vez y en un solo lugar: pantalla pequeña
+     (en cualquier orientación) + puntero grueso. La clase se pone antes de
+     pintar para que el layout móvil y el comportamiento del editor nunca
+     queden desincronizados — una ventana angosta de escritorio conserva
+     todas sus barras. */
+  (function () {
+    var coarse = window.matchMedia('(pointer: coarse)').matches;
+    var small = Math.min(window.innerWidth, window.innerHeight) <= 720;
+    if (coarse && small) document.documentElement.classList.add('is-mobile');
+  })();
+</script>
 <style>
   :root {
     --bg: #0a0a0a;
@@ -48,13 +60,20 @@
 
   #topbar {
     position: absolute; top: 0; left: 0; right: 0; z-index: 2;
-    display: flex; align-items: center; justify-content: space-between;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
     padding: 14px 20px;
     background: linear-gradient(to bottom, rgba(28,28,30,0.9), transparent);
     pointer-events: none;
   }
   #topbar h1 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
   #hint { font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; color: var(--text-dim); }
+  #btnHelp {
+    width: 26px; height: 26px; flex: none; padding: 0; border-radius: 50%;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.04);
+    color: var(--text-dim); font-size: 12px; line-height: 1; cursor: pointer;
+  }
+  #btnHelp:hover { color: var(--text); border-color: var(--accent); background: rgba(255,255,255,0.08); }
   #readout {
     position: absolute; top: 46px; left: 20px; z-index: 2;
     font-family: "SFMono-Regular", Menlo, Consolas, monospace;
@@ -118,6 +137,18 @@
   .step-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); }
   .step.active .step-dot { background: var(--accent); }
   .step-label { font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; }
+
+  /* ---------- BARRA DE PASOS EN MÓVIL ----------
+     Reemplaza al stepper inferior en el celular: los mismos tres pasos,
+     arriba y con nombres que se entienden sin saber qué es una extrusión. */
+  #mobileSteps { display: none; }
+  .mstep {
+    flex: 1; font-family: inherit; font-size: 11px; font-weight: 500;
+    padding: 9px 4px; border-radius: 7px;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.03);
+    color: var(--text-dim); text-align: center; white-space: nowrap;
+  }
+  .mstep.active { border-color: var(--accent); color: var(--accent); background: rgba(255,255,255,0.09); }
 
   #warning {
     position: absolute; top: 46px; left: 50%; transform: translateX(-50%); z-index: 2;
@@ -239,7 +270,7 @@
 
   /* ---------- PANEL DE ESCALA (solo móvil) ---------- */
   #mobileScalePanel {
-    position: absolute; top: 56px; right: 16px; z-index: 3;
+    position: absolute; top: 56px; right: 16px; z-index: 5;
     width: 190px;
     background: var(--panel);
     border: 1px solid var(--line);
@@ -250,7 +281,31 @@
   #mobileScalePanel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 8px; }
   #mobileScalePanel input[type=range] { width: 100%; accent-color: var(--accent); }
 
-  /* ---------- MÓVIL ---------- */
+  /* ---------- GLOBOS DE AYUDA ----------
+     Un letrero a la vez, anclado al control del que habla. Se cierran con la
+     ✕ o con "Entendido"; "No mostrar más" los apaga hasta la próxima sesión,
+     y el botón "?" del encabezado los vuelve a encender cuando el usuario
+     quiera. */
+  #tourLayer { position: fixed; inset: 0; z-index: 45; pointer-events: none; }
+  .tour-tip {
+    position: absolute; width: 250px; max-width: calc(100vw - 24px);
+    background: var(--panel); border: 1px solid var(--accent);
+    border-radius: 10px; padding: 14px 14px 10px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.5);
+    pointer-events: auto;
+  }
+  .tour-tip p { font-size: 12px; line-height: 1.5; color: var(--text); margin: 0 0 12px; }
+  .tour-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .tour-tip .tour-close {
+    position: absolute; top: 2px; right: 4px;
+    background: none; border: none; color: var(--text-dim);
+    font-size: 15px; line-height: 1; padding: 6px; cursor: pointer;
+  }
+  .tour-tip .tour-close:hover { color: var(--text); background: none; }
+  .tour-tip .tour-skip { font-size: 11px; color: var(--text-dim); padding: 6px 0; }
+  .tour-tip .tour-ok { font-size: 12px; padding: 7px 14px; }
+
+  /* ---------- PANTALLAS ANGOSTAS (también escritorio) ---------- */
   @media (max-width: 720px) {
     #topbar { padding: 10px 14px; }
     #topbar h1 { font-size: 13px; }
@@ -260,7 +315,6 @@
     #stepper { gap: 14px; padding: 12px 0; }
     .step-label { font-size: 10px; }
     #tracePanel { top: auto; bottom: 150px; right: 12px; left: 12px; width: auto; }
-    #mobileScalePanel { top: auto; bottom: 150px; right: 12px; left: 12px; width: auto; }
 
     /* El actionbar se vuelve un panel lateral colapsable "hacia un costado". */
     #actionbarWrap {
@@ -268,7 +322,9 @@
       display: flex; align-items: center; gap: 6px;
       transition: transform .25s ease;
     }
-    #actionbarWrap.collapsed { transform: translateX(100%); }
+    /* Se deja siempre la pestaña visible: colapsar no puede dejar los
+       controles fuera de pantalla sin forma de recuperarlos. */
+    #actionbarWrap.collapsed { transform: translateX(calc(100% - 30px)); }
     #actionbarToggle {
       width: 30px; height: 40px; flex: none; padding: 0;
       display: flex; align-items: center; justify-content: center;
@@ -286,6 +342,43 @@
   @media (min-width: 721px) {
     #actionbarToggle { display: none; }
   }
+
+  /* ---------- LAYOUT DE CELULAR ----------
+     Solo cuando el editor está de verdad en modo móvil (pantalla pequeña +
+     táctil). Arriba: pasos. Abajo: escala. Nada más compite por el espacio,
+     así que ninguna barra tapa a otra. */
+  .is-mobile #topbar { padding: 10px 14px; }
+  .is-mobile #topbar h1 { font-size: 13px; }
+  .is-mobile #hint { display: none; }
+
+  .is-mobile #stepper { display: none; }
+  .is-mobile #mobileSteps {
+    position: absolute; top: 42px; left: 10px; right: 10px; z-index: 6;
+    display: flex; gap: 6px;
+    background: rgba(22,22,22,0.94);
+    border: 1px solid var(--line); border-radius: 10px; padding: 5px;
+    backdrop-filter: blur(6px);
+  }
+
+  /* Dibujar y calcar son de escritorio: sus barras no existen en el celular. */
+  .is-mobile #actionbarWrap { display: none !important; }
+  .is-mobile #tracePanel { display: none !important; }
+  .is-mobile #areaNotice { display: none; }
+
+  /* Los avisos van debajo de la barra de pasos, nunca encima de ella. */
+  .is-mobile #readout { top: 96px; left: 14px; font-size: 11px; max-width: calc(100% - 28px); }
+  .is-mobile #warning { top: 96px; }
+
+  /* La escala es la única barra inferior: a lo ancho y anclada a la pantalla. */
+  .is-mobile #mobileScalePanel {
+    position: fixed; top: auto; bottom: 0; left: 0; right: 0; width: auto; z-index: 6;
+    border-radius: 12px 12px 0 0;
+    border-left: none; border-right: none; border-bottom: none;
+    background: rgba(22,22,22,0.96);
+    backdrop-filter: blur(6px);
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  }
+  .is-mobile #mobileScalePanel .ref-row button { font-size: 12px; padding: 11px 6px; }
 </style>
 </head>
 <body>
@@ -313,7 +406,16 @@
 
   <div id="topbar">
     <h1>Topitos — dibuja tu figura</h1>
-    <div id="hint">rueda: zoom · clic derecho sostenido: paneo</div>
+    <div class="topbar-right">
+      <div id="hint">rueda: zoom · clic derecho sostenido: paneo</div>
+      <button id="btnHelp" type="button" title="Ver las ayudas otra vez" aria-label="Ver las ayudas otra vez">?</button>
+    </div>
+  </div>
+
+  <div id="mobileSteps" role="group" aria-label="Pasos">
+    <button type="button" class="mstep active" id="mstepImport">1 · Importar</button>
+    <button type="button" class="mstep" id="mstepScale">2 · Escalar</button>
+    <button type="button" class="mstep" id="mstepExtrude">3 · Ver en 3D</button>
   </div>
 
   <div id="readout"></div>
@@ -340,12 +442,12 @@
   </div>
 
   <div id="mobileScalePanel">
-    <h2>Escala del motivo</h2>
-    <div class="slider-label"><span>Tamaño</span><span id="mobileScaleVal">100%</span></div>
-    <input id="mobileScaleSlider" type="range" min="30" max="250" value="100">
+    <h2>Tamaño del motivo</h2>
+    <div class="slider-label"><span>Escala</span><span id="mobileScaleVal">100%</span></div>
+    <input id="mobileScaleSlider" type="range" min="35" max="250" value="100">
     <div class="ref-row">
       <button id="btnMobileBack" class="danger">‹ Otro motivo</button>
-      <button id="btnMobileAdvance" class="primary">Avanzar a 3D ›</button>
+      <button id="btnMobileAdvance" class="primary">Ver en 3D ›</button>
     </div>
   </div>
 
@@ -364,7 +466,7 @@
   <div id="stepper">
     <button type="button" class="step active" id="stepImport"><div class="step-dot"></div><div class="step-label">1 · Importar</div></button>
     <button type="button" class="step" id="stepDraw"><div class="step-dot"></div><div class="step-label">2 · Dibujar</div></button>
-    <button type="button" class="step" id="stepExtrude"><div class="step-dot"></div><div class="step-label">3 · Extrusión 3D</div></button>
+    <button type="button" class="step" id="stepExtrude"><div class="step-dot"></div><div class="step-label">3 · Ver en 3D</div></button>
   </div>
 
   <div id="importScreen">
@@ -408,6 +510,8 @@
     <div class="spinner" id="loadingSpinner"></div>
     <div class="msg" id="loadingMsg">Cargando…</div>
   </div>
+
+  <div id="tourLayer"></div>
 </div>
 
 <input type="file" id="traceInput" accept="image/*" hidden>
@@ -434,12 +538,18 @@ const TRACE_KEY = 'topitos-trace';
 const TERMS_KEY = 'topitos-terms-accepted';
 const $ = id => document.getElementById(id);
 
-// Un solo punto de verdad para "es móvil": mismo criterio que el breakpoint CSS,
-// y que además exige puntero grueso (para no tratar una laptop angosta como celular).
-const isMobile = window.matchMedia('(max-width: 720px)').matches && window.matchMedia('(pointer: coarse)').matches;
+/* Un solo punto de verdad para "es móvil", y es el mismo que decidió la clase
+   .is-mobile del <html> antes de pintar: así el layout y el comportamiento
+   nunca se contradicen. */
+const isMobile = document.documentElement.classList.contains('is-mobile');
 const mobileScalePanel = $('mobileScalePanel');
 const mobileScaleSlider = $('mobileScaleSlider');
+const MIN_MOBILE_SCALE = 35;   // por debajo de esto la pieza deja de ser fabricable
 let mobileScaleFactor = 1;
+
+// Banderas de arranque: los globos de ayuda esperan a que no haya nada encima.
+let preludeDone = !!window.__preludeSeen;
+let termsDone = false;
 
 /* ============================================================
    OVERLAY DE CARGA — evita que el usuario insista con más clics
@@ -492,13 +602,124 @@ function hideLoading() {
 }
 
 /* ============================================================
+   GLOBOS DE AYUDA — un letrero a la vez, pegado al control del
+   que habla. Se cierran con ✕ o con "Entendido"; "No mostrar
+   más" los apaga hasta la próxima sesión y el botón "?" del
+   encabezado los vuelve a encender.
+   ============================================================ */
+const TOUR_KEY = 'topitos-tour-editor';
+const TOUR_OFF_KEY = TOUR_KEY + ':off';
+
+let tourSeen = new Set();
+try { tourSeen = new Set(JSON.parse(sessionStorage.getItem(TOUR_KEY) || '[]')); } catch (e) {}
+let tourOff = false;
+try { tourOff = sessionStorage.getItem(TOUR_OFF_KEY) === '1'; } catch (e) {}
+let activeTip = null;
+
+function saveTourSeen() {
+  try { sessionStorage.setItem(TOUR_KEY, JSON.stringify(Array.from(tourSeen))); } catch (e) {}
+}
+
+function closeTip() {
+  if (!activeTip) return;
+  window.removeEventListener('resize', activeTip.place);
+  activeTip.el.remove();
+  activeTip = null;
+}
+
+function showTip(id, text, target, next) {
+  if (tourOff || tourSeen.has(id)) return;
+  if (activeTip) return;               // nunca dos letreros encima del otro
+
+  const tip = document.createElement('div');
+  tip.className = 'tour-tip';
+  tip.innerHTML =
+    '<button class="tour-close" type="button" aria-label="Cerrar">✕</button>' +
+    '<p></p>' +
+    '<div class="tour-row">' +
+      '<button class="tour-skip" type="button">No mostrar más</button>' +
+      '<button class="tour-ok primary" type="button">Entendido</button>' +
+    '</div>';
+  tip.querySelector('p').textContent = text;
+  $('tourLayer').appendChild(tip);
+
+  const place = () => {
+    const rect = target && target.getBoundingClientRect ? target.getBoundingClientRect() : null;
+    const w = tip.offsetWidth;
+    const h = tip.offsetHeight;
+    let left, top;
+    if (rect && rect.width && rect.height) {
+      left = rect.left + rect.width / 2 - w / 2;
+      top = rect.top > window.innerHeight / 2 ? rect.top - h - 12 : rect.bottom + 12;
+    } else {
+      left = window.innerWidth / 2 - w / 2;
+      top = window.innerHeight / 2 - h / 2;
+    }
+    tip.style.left = Math.max(12, Math.min(left, window.innerWidth - w - 12)) + 'px';
+    tip.style.top = Math.max(12, Math.min(top, window.innerHeight - h - 12)) + 'px';
+  };
+  place();
+  window.addEventListener('resize', place);
+  activeTip = { id: id, el: tip, place: place };
+
+  const markSeen = () => { tourSeen.add(id); saveTourSeen(); closeTip(); };
+  tip.querySelector('.tour-close').addEventListener('click', markSeen);
+  tip.querySelector('.tour-ok').addEventListener('click', () => {
+    markSeen();
+    if (typeof next === 'function') setTimeout(next, 150);
+  });
+  tip.querySelector('.tour-skip').addEventListener('click', () => {
+    tourOff = true;
+    try { sessionStorage.setItem(TOUR_OFF_KEY, '1'); } catch (e) {}
+    closeTip();
+  });
+}
+
+/* Qué letrero corresponde según dónde está parado el usuario. */
+function tipForStage() {
+  if (catalogScreen.style.display === 'flex') {
+    showTip('catalogo', 'Busca por etiqueta y toca el motivo que quieras: se carga de una vez en el área de trabajo.', $('catalogSearch'));
+    return;
+  }
+  if (importScreen.style.display !== 'none') {
+    if (isMobile) {
+      showTip('inicio', 'Empieza aquí: elige un motivo de la biblioteca para tu Topito.', $('btnCatalog'),
+        () => showTip('pasos', 'Con estos tres botones te mueves entre importar el motivo, ajustar su tamaño y verlo en 3D.', $('mobileSteps')));
+    } else {
+      showTip('inicio', 'Empieza aquí: sube tu archivo, elige un motivo de la biblioteca o dibuja tu figura a mano.', $('btnCatalog'));
+    }
+    return;
+  }
+  if (isMobile) {
+    showTip('escala', 'Ajusta el tamaño de tu figura con esta barra. El cuadro de la pantalla es el área real de 10 × 10 mm.', mobileScaleSlider,
+      () => showTip('ver3d', 'Cuando te guste, toca "Ver en 3D" para elegir el acabado y confirmar tu pedido.', $('btnMobileAdvance')));
+  } else {
+    showTip('dibujo', 'Cierra la figura volviendo al primer punto. Después puedes suavizar el trazo, editar nodos o agregar un agujero, y aceptar el diseño.', $('actionbar'));
+  }
+}
+
+function maybeStartTour() {
+  if (!preludeDone || !termsDone) return;
+  setTimeout(tipForStage, 400);
+}
+
+$('btnHelp').addEventListener('click', () => {
+  tourSeen.clear();
+  saveTourSeen();
+  tourOff = false;
+  try { sessionStorage.removeItem(TOUR_OFF_KEY); } catch (e) {}
+  closeTip();
+  tipForStage();
+});
+
+/* ============================================================
    TÉRMINOS Y CONDICIONES — compuerta antes de tocar el editor.
    ============================================================ */
 (function setupTermsGate() {
   const gate = $('termsGate');
   let accepted = false;
   try { accepted = sessionStorage.getItem(TERMS_KEY) === '1'; } catch (e) {}
-  if (accepted) { gate.style.display = 'none'; return; }
+  if (accepted) { gate.style.display = 'none'; termsDone = true; maybeStartTour(); return; }
 
   const checkbox = $('termsCheckbox');
   const btn = $('btnTermsAccept');
@@ -506,6 +727,8 @@ function hideLoading() {
   btn.addEventListener('click', () => {
     try { sessionStorage.setItem(TERMS_KEY, '1'); } catch (e) {}
     gate.style.display = 'none';
+    termsDone = true;
+    maybeStartTour();
   });
 })();
 
@@ -649,6 +872,9 @@ function normalizeImageUrl(url) {
 /* ============================================================
    HERRAMIENTA DE DIBUJO (tipo pluma: clic = ancla recta,
    clic + arrastrar = ancla con manejadores/curva)
+
+   En el celular no se dibuja: la figura siempre viene de la
+   biblioteca, un dedo mueve la vista y dos dedos hacen zoom.
    ============================================================ */
 const tool = new paper.Tool();
 const canvasEl = $('canvas');
@@ -657,11 +883,14 @@ const canvasEl = $('canvas');
 canvasEl.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // Mientras la imagen de calco esté desbloqueada, el lienzo la mueve en vez de dibujar.
-function traceIsEditable() { return !!traceRaster && !traceLocked; }
+function traceIsEditable() { return !isMobile && !!traceRaster && !traceLocked; }
 
 tool.onMouseDown = (event) => {
   if (multiTouch) return;
   if (event.event.button === 2) { isPanning = true; return; }
+
+  // Celular: el lienzo solo se navega. Un dedo arrastra la vista.
+  if (isMobile) { isPanning = true; return; }
 
   if (traceIsEditable()) { dragOrigin = event.point; return; }
 
@@ -698,6 +927,7 @@ tool.onMouseDown = (event) => {
 tool.onMouseDrag = (event) => {
   if (multiTouch) return;
   if (isPanning) { paper.view.center = paper.view.center.subtract(event.delta); return; }
+  if (isMobile) return;
 
   if (traceIsEditable()) {
     traceState.x += event.delta.x;
@@ -725,6 +955,7 @@ tool.onMouseDrag = (event) => {
 tool.onMouseUp = () => { drawingSegment = null; isPanning = false; activeNodeHit = null; };
 
 tool.onMouseMove = (event) => {
+  if (isMobile) return;   // en celular el readout se reserva para los avisos
   const p = event.point;
   readout.textContent = `x: ${p.x.toFixed(2)}mm   y: ${p.y.toFixed(2)}mm   zoom: ${paper.view.zoom.toFixed(0)}x`;
 };
@@ -746,10 +977,11 @@ canvasEl.addEventListener('wheel', (event) => {
 }, { passive: false });
 
 /* ============================================================
-   GESTOS TÁCTILES — dos dedos hacen zoom y paneo. Un dedo dibuja.
-   Paper.js trata el toque como ratón, así que cuando entra un
-   segundo dedo se descarta el ancla recién creada (heurística de
-   250ms) para que el gesto de zoom no deje un punto suelto.
+   GESTOS TÁCTILES — dos dedos hacen zoom y paneo. Paper.js trata
+   el toque como ratón, así que cuando entra un segundo dedo se
+   descarta el ancla recién creada (heurística de 250ms) para que
+   el gesto de zoom no deje un punto suelto en pantallas táctiles
+   de escritorio, donde sí se dibuja.
    ============================================================ */
 let multiTouch = false;
 let lastSegmentAt = 0;
@@ -847,7 +1079,8 @@ function minBridgeDistance(outer, hole) {
   return min;
 }
 
-/* El puente mínimo ahora bloquea el botón Aceptar, no solo avisa. */
+/* El puente mínimo bloquea el paso al 3D, no solo avisa — tanto en el botón
+   de escritorio como en el de celular. */
 function revalidateBridge() {
   if (holePath && holePath.closed && outerPath && outerPath.closed) {
     bridgeOk = minBridgeDistance(outerPath, holePath) >= MIN_BRIDGE_MM;
@@ -857,6 +1090,7 @@ function revalidateBridge() {
   warning.style.display = bridgeOk ? 'none' : 'block';
   const ready = !!outerPath && outerPath.closed && mode !== 'hole';
   btnAccept.disabled = !(ready && bridgeOk);
+  $('btnMobileAdvance').disabled = !(ready && bridgeOk);
 }
 
 btnSmooth.addEventListener('click', () => {
@@ -902,14 +1136,14 @@ function resetAll() {
   btnNodeEdit.disabled = true;
   btnNodeEdit.classList.remove('active');
   btnNodeEdit.textContent = 'Editar nodos';
-  canvasEl.style.cursor = 'crosshair';
+  canvasEl.style.cursor = isMobile ? 'grab' : 'crosshair';
   try { sessionStorage.removeItem(DESIGN_KEY); } catch (e) {}
   if (isMobile) mobileScalePanel.style.display = 'none';
   revalidateBridge();
 }
 
 /* ============================================================
-   CALCO — imagen de referencia bajo el dibujo
+   CALCO — imagen de referencia bajo el dibujo (solo escritorio)
    ============================================================ */
 const traceInput = $('traceInput');
 btnTrace.addEventListener('click', () => {
@@ -959,7 +1193,7 @@ function createTraceRaster(dataUrl) {
   traceRaster = new paper.Raster({ source: dataUrl, crossOrigin: 'anonymous' });
   traceRaster.onLoad = () => { applyTraceTransform(); };
   drawLayer.activate();
-  tracePanel.style.display = 'block';
+  if (!isMobile) tracePanel.style.display = 'block';
   updateTraceHint();
 }
 
@@ -989,7 +1223,7 @@ function updateTraceHint() {
   $('traceHint').textContent = traceLocked
     ? 'Imagen bloqueada. Ya puedes dibujar encima; la opacidad sigue siendo ajustable.'
     : 'Arrastra la imagen para moverla. Ajústala y bloquéala para dibujar encima.';
-  canvasEl.style.cursor = traceIsEditable() ? 'move' : (nodeEditMode ? 'default' : 'crosshair');
+  canvasEl.style.cursor = isMobile ? 'grab' : (traceIsEditable() ? 'move' : (nodeEditMode ? 'default' : 'crosshair'));
 }
 
 $('traceOpacity').addEventListener('input', (e) => {
@@ -1017,7 +1251,7 @@ $('btnTraceRemove').addEventListener('click', () => {
   if (traceRaster) traceRaster.remove();
   traceRaster = null; traceSrc = null; traceLocked = false;
   tracePanel.style.display = 'none';
-  canvasEl.style.cursor = nodeEditMode ? 'default' : 'crosshair';
+  canvasEl.style.cursor = isMobile ? 'grab' : (nodeEditMode ? 'default' : 'crosshair');
   try { sessionStorage.removeItem(TRACE_KEY); } catch (e) {}
 });
 
@@ -1068,7 +1302,7 @@ async function applyConfig() {
 /* ---------- PRELUDE ---------- */
 async function runPrelude() {
   const prelude = $('prelude');
-  if (window.__preludeSeen) return;
+  if (window.__preludeSeen) { preludeDone = true; maybeStartTour(); return; }
 
   // Si la configuración tarda, se revela la app igual: nadie espera 8s por un logo.
   const data = await Promise.race([
@@ -1104,7 +1338,11 @@ async function runPrelude() {
 
 function dismissPrelude(prelude, fadeMs) {
   prelude.classList.add('fading');
-  setTimeout(() => prelude.remove(), fadeMs + 60);
+  setTimeout(() => {
+    prelude.remove();
+    preludeDone = true;
+    maybeStartTour();
+  }, fadeMs + 60);
 }
 
 applyConfig();
@@ -1194,7 +1432,7 @@ function restoreSession() {
   try {
     const rawTrace = sessionStorage.getItem(TRACE_KEY);
     const t = rawTrace ? JSON.parse(rawTrace) : null;
-    if (t && t.src) {
+    if (t && t.src && !isMobile) {
       traceSrc = t.src;
       traceState = Object.assign(traceState, t.state || {});
       traceLocked = !!t.locked;
@@ -1203,6 +1441,15 @@ function restoreSession() {
     }
   } catch (err) {
     console.warn('No se pudo recuperar el calco:', err);
+  }
+
+  /* Al volver del 3D en celular, la barra de escala tiene que reaparecer:
+     es el único control del paso 2 allí. */
+  if (restored && isMobile) {
+    mobileScaleFactor = 1;
+    mobileScaleSlider.value = 100;
+    $('mobileScaleVal').textContent = '100%';
+    mobileScalePanel.style.display = 'block';
   }
 
   return restored;
@@ -1222,6 +1469,7 @@ function closeImportScreen() {
   importScreen.style.display = 'none';
   stepImport.classList.remove('active');
   stepDraw.classList.add('active');
+  syncMobileSteps();
 }
 
 /* Volver al paso 1 sin perder lo ya dibujado: solo reabre la pantalla de
@@ -1233,6 +1481,7 @@ function openImportScreen() {
   importScreen.style.display = 'flex';
   stepImport.classList.add('active');
   stepDraw.classList.remove('active');
+  syncMobileSteps();
 }
 
 function setImportStatus(text, isError) {
@@ -1427,10 +1676,14 @@ function setCatalogStatus(text, isError) {
 }
 
 $('btnCatalog').addEventListener('click', openCatalog);
-$('btnCatalogClose').addEventListener('click', () => { catalogScreen.style.display = 'none'; });
+$('btnCatalogClose').addEventListener('click', () => {
+  catalogScreen.style.display = 'none';
+  syncMobileSteps();
+});
 
 async function openCatalog() {
   catalogScreen.style.display = 'flex';
+  syncMobileSteps();
   if (!catalogItems.length) {
     setCatalogStatus('Cargando motivos…', false);
     showLoading('Cargando biblioteca de motivos…');
@@ -1510,6 +1763,10 @@ async function chooseMotif(item, i) {
     importSVGDesign(svgText);
     catalogScreen.style.display = 'none';
     closeImportScreen();
+    if (isMobile) {
+      closeTip();
+      setTimeout(tipForStage, 350);   // ya está en el paso de escalar: se explica ahí
+    }
   } catch (err) {
     console.error(err);
     setCatalogStatus('No se pudo cargar ese motivo: ' + err.message, true);
@@ -1519,22 +1776,25 @@ async function chooseMotif(item, i) {
 }
 
 /* ============================================================
-   RESTRICCIONES EN MÓVIL — personalizar con archivo propio o a
-   mano queda solo para escritorio; desde el celular únicamente
-   se elige un motivo de la biblioteca y se ajusta su escala.
+   RESTRICCIONES EN CELULAR — dibujar y calcar son de escritorio;
+   desde el celular se elige un motivo de la biblioteca y se
+   ajusta su tamaño.
    ============================================================ */
 if (isMobile) {
   $('btnUpload').style.display = 'none';
   $('btnSkipImport').style.display = 'none';
   const importP = document.querySelector('#importScreen p');
-  if (importP) importP.textContent = 'Elige un motivo de la biblioteca. Desde el celular solo puedes ajustar su escala — para subir tu propio archivo o dibujar a mano, entra desde un computador.';
+  if (importP) importP.textContent = 'Elige un motivo de la biblioteca. Desde el celular solo ajustas su tamaño — para subir tu propio archivo o dibujar a mano, entra desde un computador.';
 
   [btnTrace, btnSmooth, btnHole, btnNodeEdit].forEach((b) => { b.style.display = 'none'; });
+  canvasEl.style.cursor = 'grab';
 }
 
 mobileScaleSlider.addEventListener('input', (e) => {
   if (!outerPath) return;
-  const percent = Number(e.target.value);
+  // Tope inferior duro: por debajo del 35% la pieza deja de ser fabricable.
+  const percent = Math.max(MIN_MOBILE_SCALE, Number(e.target.value));
+  if (String(percent) !== e.target.value) e.target.value = String(percent);
   const relative = (percent / 100) / mobileScaleFactor;
   const center = new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2);
   outerPath.scale(relative, center);
@@ -1552,13 +1812,13 @@ $('btnMobileBack').addEventListener('click', () => {
   openCatalog();
 });
 
-/* Avanzar: mismo criterio de validación que el paso 3 del stepper. */
+/* Avanzar: mismo criterio de validación que el paso 3. */
 $('btnMobileAdvance').addEventListener('click', () => {
   if (!outerPath || !outerPath.closed) { flash('Elige un motivo antes de continuar.'); return; }
   acceptDesign();
 });
 
-/* ---------- Panel de controles colapsable "hacia un costado" (móvil) ---------- */
+/* ---------- Panel de controles colapsable "hacia un costado" (escritorio angosto) ---------- */
 const actionbarWrap = $('actionbarWrap');
 const actionbarToggle = $('actionbarToggle');
 actionbarToggle.addEventListener('click', () => {
@@ -1566,7 +1826,7 @@ actionbarToggle.addEventListener('click', () => {
   actionbarToggle.textContent = collapsed ? '›' : '‹';
 });
 
-/* ---------- Stepper interactivo — volver a un paso anterior ---------- */
+/* ---------- Stepper de escritorio — volver a un paso anterior ---------- */
 stepImport.addEventListener('click', () => {
   if (importScreen.style.display !== 'none') return; // ya está abierto
   openImportScreen();
@@ -1581,11 +1841,51 @@ stepExtrude.addEventListener('click', () => {
   acceptDesign();
 });
 
+/* ---------- Barra de pasos en celular ----------
+   Los mismos destinos del stepper, arriba y con nombres que se entienden
+   sin conocer la palabra "extrusión". */
+const mstepImport = $('mstepImport');
+const mstepScale = $('mstepScale');
+const mstepExtrude = $('mstepExtrude');
+
+function syncMobileSteps() {
+  const importing = importScreen.style.display !== 'none' || catalogScreen.style.display === 'flex';
+  mstepImport.classList.toggle('active', importing);
+  mstepScale.classList.toggle('active', !importing);
+  mstepExtrude.classList.remove('active');
+}
+
+mstepImport.addEventListener('click', () => {
+  if (catalogScreen.style.display === 'flex') { catalogScreen.style.display = 'none'; syncMobileSteps(); return; }
+  openImportScreen();
+});
+
+mstepScale.addEventListener('click', () => {
+  if (!outerPath) {
+    flash('Elige primero un motivo de la biblioteca.');
+    openCatalog();
+    return;
+  }
+  catalogScreen.style.display = 'none';
+  closeImportScreen();
+  mobileScalePanel.style.display = 'block';
+});
+
+mstepExtrude.addEventListener('click', () => {
+  if (!outerPath || !outerPath.closed) {
+    flash('Elige un motivo antes de pasar a la vista 3D.');
+    openCatalog();
+    return;
+  }
+  acceptDesign();
+});
+
 /* ============================================================
    ARRANQUE
    ============================================================ */
 if (restoreSession()) closeImportScreen();
 revalidateBridge();
+syncMobileSteps();
 </script>
 </body>
 </html>
