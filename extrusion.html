@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <link rel="icon" type="image/jpeg" href="https://res.cloudinary.com/dtpxoihkf/image/upload/v1786830126/EVOQUE_HAUS_FAVICON_ijlska.jpg">
 <title>Topitos — Extrusión 3D</title>
+<script>
+  /* Mismo criterio que index.html: pantalla pequeña (en cualquier orientación)
+     + puntero grueso. Se marca antes de pintar para que el layout de celular
+     y el JS nunca queden desincronizados. */
+  (function () {
+    var coarse = window.matchMedia('(pointer: coarse)').matches;
+    var small = Math.min(window.innerWidth, window.innerHeight) <= 720;
+    if (coarse && small) document.documentElement.classList.add('is-mobile');
+  })();
+</script>
 <style>
   :root {
     --bg: #0a0a0a;
@@ -46,6 +56,13 @@
   #topbar h1 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
   #topbar a { color: var(--text-dim); font-size: 12px; text-decoration: none; white-space: nowrap; }
   #topbar a:hover { color: var(--text); }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  #btnHelp {
+    width: 26px; height: 26px; flex: none; padding: 0; border-radius: 50%;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.04);
+    color: var(--text-dim); font-family: inherit; font-size: 12px; line-height: 1; cursor: pointer;
+  }
+  #btnHelp:hover { color: var(--text); border-color: var(--accent); background: rgba(255,255,255,0.08); }
   #hint {
     position: absolute; top: 46px; left: 20px; z-index: 2;
     font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; color: var(--text-dim);
@@ -137,6 +154,27 @@
   .step.active .step-dot { background: var(--accent); }
   .step-label { font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; }
 
+  /* ---------- BARRA DE PASOS EN MÓVIL ---------- */
+  #mobileSteps { display: none; }
+  .mstep {
+    flex: 1; font-family: inherit; font-size: 11px; font-weight: 500;
+    padding: 9px 4px; border-radius: 7px;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.03);
+    color: var(--text-dim); text-align: center; white-space: nowrap; cursor: pointer;
+  }
+  .mstep.active { border-color: var(--accent); color: var(--accent); background: rgba(255,255,255,0.09); }
+
+  /* ---------- BARRA INFERIOR DE CONTROLES (solo celular) ---------- */
+  #mobileDock { display: none; }
+  .dock-tab {
+    flex: 1; font-family: inherit; font-size: 11px; font-weight: 500;
+    padding: 9px 4px; border-radius: 7px 7px 0 0;
+    border: 1px solid var(--line); border-bottom: none;
+    background: rgba(255,255,255,0.03); color: var(--text-dim);
+    cursor: pointer; white-space: nowrap;
+  }
+  .dock-tab.active { border-color: var(--accent); color: var(--accent); background: rgba(255,255,255,0.09); }
+
   /* ---------- PEDIDO ---------- */
   #orderModal {
     position: absolute; inset: 0; z-index: 10;
@@ -207,6 +245,33 @@
   }
   .delivery-opt.active { border-color: var(--accent); color: var(--accent); }
 
+  /* ---------- GLOBOS DE AYUDA ---------- */
+  #tourLayer { position: fixed; inset: 0; z-index: 45; pointer-events: none; }
+  .tour-tip {
+    position: absolute; width: 250px; max-width: calc(100vw - 24px);
+    background: var(--panel); border: 1px solid var(--accent);
+    border-radius: 10px; padding: 14px 14px 10px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.5);
+    pointer-events: auto;
+  }
+  .tour-tip p { font-size: 12px; line-height: 1.5; color: var(--text); margin: 0 0 12px; }
+  .tour-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .tour-tip button { font-family: inherit; cursor: pointer; }
+  .tour-tip .tour-close {
+    position: absolute; top: 2px; right: 4px;
+    background: none; border: none; color: var(--text-dim);
+    font-size: 15px; line-height: 1; padding: 6px;
+  }
+  .tour-tip .tour-close:hover { color: var(--text); }
+  .tour-tip .tour-skip {
+    font-size: 11px; color: var(--text-dim);
+    background: none; border: none; padding: 6px 0;
+  }
+  .tour-tip .tour-ok {
+    font-size: 12px; font-weight: 600; padding: 7px 14px;
+    border: none; border-radius: 7px; background: var(--accent); color: #0a0a0a;
+  }
+
   @media (max-width: 720px) {
     #topbar { padding: 10px 14px; }
     #topbar h1 { font-size: 13px; }
@@ -216,6 +281,52 @@
     #stepper { gap: 14px; padding: 12px 0; }
     .step-label { font-size: 10px; }
   }
+
+  /* ---------- LAYOUT DE CELULAR ----------
+     Arriba: los tres pasos. Abajo: acabado, giro y vástago en pestañas, con
+     el precio y el botón de confirmar siempre visibles. El panel lateral no
+     existe aquí, así que nada se superpone. */
+  .is-mobile #topbar { padding: 10px 14px; }
+  .is-mobile #topbar h1 { font-size: 13px; }
+  .is-mobile #hint { display: none; }
+  .is-mobile #backLink { display: none; }
+  .is-mobile #panelWrap { display: none !important; }
+  .is-mobile #stepper { display: none; }
+
+  .is-mobile #mobileSteps {
+    position: absolute; top: 42px; left: 10px; right: 10px; z-index: 6;
+    display: flex; gap: 6px;
+    background: rgba(22,22,22,0.94);
+    border: 1px solid var(--line); border-radius: 10px; padding: 5px;
+    backdrop-filter: blur(6px);
+  }
+
+  .is-mobile #mobileDock {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
+    display: block;
+    background: rgba(22,22,22,0.96);
+    border-top: 1px solid var(--line);
+    backdrop-filter: blur(6px);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .is-mobile #dockPanel {
+    display: none;
+    padding: 14px; max-height: 38vh; overflow-y: auto;
+    border-bottom: 1px solid var(--line);
+  }
+  .is-mobile #dockPanel .block + .block { margin-top: 16px; }
+  .is-mobile #dockPanel h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-dim); margin: 0 0 8px;
+  }
+  .is-mobile #dockTabs { display: flex; gap: 6px; padding: 8px 10px 0; }
+  .is-mobile #dockBar { padding: 10px 12px 12px; }
+  .is-mobile #dockBar #blockPrice { display: flex; align-items: center; gap: 12px; }
+  .is-mobile #dockBar #blockPrice h2 { display: none; }
+  .is-mobile #dockBar #priceInfo { flex: 1; min-width: 0; }
+  .is-mobile #dockBar #price { font-size: 17px; margin: 0; }
+  .is-mobile #dockBar #priceMeta { font-size: 10px; margin: 2px 0 0; }
+  .is-mobile #dockBar .confirm { width: auto; flex: none; padding: 11px 16px; }
 </style>
 </head>
 <body>
@@ -227,14 +338,23 @@
 
   <div id="topbar">
     <h1>Topitos — vista 3D</h1>
-    <a href="index.html" id="backLink">← volver a editar el diseño</a>
+    <div class="topbar-right">
+      <a href="index.html" id="backLink">← volver a editar el diseño</a>
+      <button id="btnHelp" type="button" title="Ver las ayudas otra vez" aria-label="Ver las ayudas otra vez">?</button>
+    </div>
   </div>
   <div id="hint">arrastrar: orbitar · rueda: zoom · W/E: mover/rotar el vástago</div>
+
+  <div id="mobileSteps" role="group" aria-label="Pasos">
+    <button type="button" class="mstep" id="mstepImport">1 · Importar</button>
+    <button type="button" class="mstep" id="mstepScale">2 · Escalar</button>
+    <button type="button" class="mstep active" id="mstepExtrude">3 · Ver en 3D</button>
+  </div>
 
   <div id="panelWrap">
     <button id="panelToggle" type="button" aria-label="Ocultar panel" aria-expanded="true">›</button>
     <div id="rightPanel">
-      <div class="block">
+      <div class="block" id="blockFinish">
         <h2>Acabado</h2>
         <div class="finishes">
           <button class="finish-btn" data-finish="plata-mate">Plata mate</button>
@@ -244,18 +364,18 @@
         </div>
       </div>
 
-      <div class="block">
+      <div class="block" id="blockFlip">
         <h2>Simetría</h2>
         <button id="btnFlip" class="panel-btn" type="button">Voltear un lado</button>
       </div>
 
-      <div class="block">
+      <div class="block" id="blockRot">
         <h2>Rotación <span class="sublabel">sobre el eje del vástago</span></h2>
         <div class="slider-label"><span>Ángulo</span><span id="rotValue">0°</span></div>
         <input id="rotSlider" type="range" min="0" max="360" step="1" value="0">
       </div>
 
-      <div class="block">
+      <div class="block" id="blockStem">
         <h2>Vástago</h2>
         <button id="btnStemToggle" class="panel-btn" type="button">
           Control de Movimiento
@@ -263,19 +383,31 @@
         </button>
       </div>
 
-      <div class="block">
+      <div class="block" id="blockPrice">
         <h2>Valor estimado</h2>
-        <div id="price">$0</div>
-        <div id="priceMeta"></div>
+        <div id="priceInfo">
+          <div id="price">$0</div>
+          <div id="priceMeta"></div>
+        </div>
         <button id="btnConfirm" class="confirm" type="button">Confirmar pedido</button>
       </div>
     </div>
   </div>
 
+  <div id="mobileDock">
+    <div id="dockPanel"></div>
+    <div id="dockTabs">
+      <button type="button" class="dock-tab" data-tab="finish">Acabado</button>
+      <button type="button" class="dock-tab" data-tab="turn">Girar</button>
+      <button type="button" class="dock-tab" data-tab="stem">Vástago</button>
+    </div>
+    <div id="dockBar"></div>
+  </div>
+
   <div id="stepper">
     <button type="button" class="step" id="stepImport"><div class="step-dot"></div><div class="step-label">1 · Importar</div></button>
     <button type="button" class="step" id="stepDraw"><div class="step-dot"></div><div class="step-label">2 · Dibujar</div></button>
-    <button type="button" class="step active" id="stepExtrude"><div class="step-dot"></div><div class="step-label">3 · Extrusión 3D</div></button>
+    <button type="button" class="step active" id="stepExtrude"><div class="step-dot"></div><div class="step-label">3 · Ver en 3D</div></button>
   </div>
 
   <div id="orderModal">
@@ -330,6 +462,8 @@
     <div class="spinner" id="loadingSpinner"></div>
     <div class="msg" id="loadingMsg">Cargando…</div>
   </div>
+
+  <div id="tourLayer"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
@@ -358,7 +492,7 @@ const DESIGN_KEY = 'topitos-design';
 const VIEW_KEY = 'topitos-3d';
 const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwHpQClCShIfaBiqcGR1mFdFM01beozZrGOUMLVQcPMO-V-mRzwqpq9yaMUScxfbwpc/exec';
 
-const isMobile = window.matchMedia('(max-width: 720px)').matches && window.matchMedia('(pointer: coarse)').matches;
+const isMobile = document.documentElement.classList.contains('is-mobile');
 
 /* ============================================================
    OVERLAY DE CARGA — mismo patrón que index.html: evita que el
@@ -411,6 +545,100 @@ function hideLoading() {
 }
 showLoading('Cargando tu diseño…');
 
+/* ============================================================
+   GLOBOS DE AYUDA — un letrero a la vez, anclado al control del
+   que habla. Mismas reglas que en el editor: ✕ o "Entendido"
+   para cerrarlo, "No mostrar más" para apagarlos por esta
+   sesión y el botón "?" del encabezado para reactivarlos.
+   ============================================================ */
+const TOUR_KEY = 'topitos-tour-3d';
+const TOUR_OFF_KEY = TOUR_KEY + ':off';
+
+let tourSeen = new Set();
+try { tourSeen = new Set(JSON.parse(sessionStorage.getItem(TOUR_KEY) || '[]')); } catch (e) {}
+let tourOff = false;
+try { tourOff = sessionStorage.getItem(TOUR_OFF_KEY) === '1'; } catch (e) {}
+let activeTip = null;
+
+function saveTourSeen() {
+  try { sessionStorage.setItem(TOUR_KEY, JSON.stringify(Array.from(tourSeen))); } catch (e) {}
+}
+
+function closeTip() {
+  if (!activeTip) return;
+  window.removeEventListener('resize', activeTip.place);
+  activeTip.el.remove();
+  activeTip = null;
+}
+
+function showTip(id, text, target, next) {
+  if (tourOff || tourSeen.has(id)) return;
+  if (activeTip) return;
+
+  const tip = document.createElement('div');
+  tip.className = 'tour-tip';
+  tip.innerHTML =
+    '<button class="tour-close" type="button" aria-label="Cerrar">✕</button>' +
+    '<p></p>' +
+    '<div class="tour-row">' +
+      '<button class="tour-skip" type="button">No mostrar más</button>' +
+      '<button class="tour-ok" type="button">Entendido</button>' +
+    '</div>';
+  tip.querySelector('p').textContent = text;
+  document.getElementById('tourLayer').appendChild(tip);
+
+  const place = () => {
+    const rect = target && target.getBoundingClientRect ? target.getBoundingClientRect() : null;
+    const w = tip.offsetWidth;
+    const h = tip.offsetHeight;
+    let left, top;
+    if (rect && rect.width && rect.height) {
+      left = rect.left + rect.width / 2 - w / 2;
+      top = rect.top > window.innerHeight / 2 ? rect.top - h - 12 : rect.bottom + 12;
+    } else {
+      left = window.innerWidth / 2 - w / 2;
+      top = window.innerHeight / 2 - h / 2;
+    }
+    tip.style.left = Math.max(12, Math.min(left, window.innerWidth - w - 12)) + 'px';
+    tip.style.top = Math.max(12, Math.min(top, window.innerHeight - h - 12)) + 'px';
+  };
+  place();
+  window.addEventListener('resize', place);
+  activeTip = { id: id, el: tip, place: place };
+
+  const markSeen = () => { tourSeen.add(id); saveTourSeen(); closeTip(); };
+  tip.querySelector('.tour-close').addEventListener('click', markSeen);
+  tip.querySelector('.tour-ok').addEventListener('click', () => {
+    markSeen();
+    if (typeof next === 'function') setTimeout(next, 150);
+  });
+  tip.querySelector('.tour-skip').addEventListener('click', () => {
+    tourOff = true;
+    try { sessionStorage.setItem(TOUR_OFF_KEY, '1'); } catch (e) {}
+    closeTip();
+  });
+}
+
+function startTour() {
+  if (isMobile) {
+    showTip('controles', 'Toca cada pestaña para cambiar el acabado, girar la pieza o mover el vástago.', document.getElementById('dockTabs'),
+      () => showTip('precio', 'El precio sale del largo de tu figura y ya cubre el par de aretes. Confirma cuando esté lista.', document.getElementById('btnConfirm'),
+        () => showTip('volver', 'Puedes volver a cambiar el motivo o su tamaño cuando quieras: tu diseño se conserva.', document.getElementById('mobileSteps'))));
+  } else {
+    showTip('controles', 'Desde aquí eliges el acabado, giras la pieza y mueves el vástago (W para moverlo, E para rotarlo).', document.getElementById('rightPanel'),
+      () => showTip('precio', 'El precio sale del largo de tu figura y ya cubre el par de aretes. Confirma cuando esté lista.', document.getElementById('btnConfirm')));
+  }
+}
+
+document.getElementById('btnHelp').addEventListener('click', () => {
+  tourSeen.clear();
+  saveTourSeen();
+  tourOff = false;
+  try { sessionStorage.removeItem(TOUR_OFF_KEY); } catch (e) {}
+  closeTip();
+  startTour();
+});
+
 const PIECE_DEPTH_MM = 0.8;
 const STEM_LENGTH_MM = 10;
 const UNITS_PER_PAIR = 2; // un pedido son siempre dos aretes
@@ -448,16 +676,16 @@ function saveViewState() {
 window.addEventListener('pagehide', saveViewState);
 document.getElementById('backLink').addEventListener('click', saveViewState);
 
-/* Los pasos 1 y 2 viven en index.html — el stepper de aquí solo permite
-   volver, guardando primero el estado de la vista 3D como hace "← volver". */
-document.getElementById('stepImport').addEventListener('click', () => {
+/* Los pasos 1 y 2 viven en index.html — desde aquí solo se vuelve, guardando
+   primero el estado de la vista 3D como hace "← volver". */
+function backToEditor() {
   saveViewState();
   window.location.href = 'index.html';
-});
-document.getElementById('stepDraw').addEventListener('click', () => {
-  saveViewState();
-  window.location.href = 'index.html';
-});
+}
+document.getElementById('stepImport').addEventListener('click', backToEditor);
+document.getElementById('stepDraw').addEventListener('click', backToEditor);
+document.getElementById('mstepImport').addEventListener('click', backToEditor);
+document.getElementById('mstepScale').addEventListener('click', backToEditor);
 
 /* ============================================================
    2. ESCENA
@@ -731,6 +959,13 @@ applyPairTransform();
   controls.update();
 })();
 
+/* En celular la barra inferior ocupa la parte baja de la pantalla: se corre
+   el punto de mira hacia abajo para que el par quede por encima de ella. */
+if (isMobile) {
+  controls.target.set(0, -Math.max(pieceSize.y * 0.6, 2), 0);
+  controls.update();
+}
+
 /* ---------- Control de Movimiento (gumball) ---------- */
 const gumball = new TransformControls(camera, renderer.domElement);
 gumball.attach(stemA);
@@ -776,7 +1011,7 @@ rotSlider.addEventListener('input', (e) => {
   applyState();
 });
 
-/* ---------- Panel plegable ---------- */
+/* ---------- Panel plegable (escritorio) ---------- */
 const panelWrap = document.getElementById('panelWrap');
 const panelToggle = document.getElementById('panelToggle');
 function setPanelCollapsed(collapsed) {
@@ -786,8 +1021,46 @@ function setPanelCollapsed(collapsed) {
   panelToggle.setAttribute('aria-label', collapsed ? 'Mostrar panel' : 'Ocultar panel');
 }
 panelToggle.addEventListener('click', () => setPanelCollapsed(!panelWrap.classList.contains('collapsed')));
-// En pantallas angostas el panel arranca plegado para no tapar la pieza.
-setPanelCollapsed(window.matchMedia('(max-width: 720px)').matches);
+// En ventanas angostas de escritorio el panel arranca plegado para no tapar la pieza.
+setPanelCollapsed(!isMobile && window.matchMedia('(max-width: 720px)').matches);
+
+/* ---------- Barra inferior de controles (celular) ----------
+   Los mismos bloques del panel lateral, movidos —no duplicados— a una barra
+   con pestañas: así conservan sus eventos y no hay dos fuentes de verdad.
+   El precio y "Confirmar pedido" quedan siempre a la vista; las pestañas se
+   abren y cierran, y nunca tapan la barra de pasos de arriba. */
+if (isMobile) {
+  const dockPanel = document.getElementById('dockPanel');
+  const dockBar = document.getElementById('dockBar');
+  const sections = {
+    finish: [document.getElementById('blockFinish')],
+    turn: [document.getElementById('blockFlip'), document.getElementById('blockRot')],
+    stem: [document.getElementById('blockStem')],
+  };
+
+  Object.keys(sections).forEach((key) => {
+    sections[key].forEach((el) => { el.style.display = 'none'; dockPanel.appendChild(el); });
+  });
+  dockBar.appendChild(document.getElementById('blockPrice'));
+
+  let openTab = null;
+  function renderDock() {
+    Object.keys(sections).forEach((key) => {
+      sections[key].forEach((el) => { el.style.display = key === openTab ? 'block' : 'none'; });
+    });
+    dockPanel.style.display = openTab ? 'block' : 'none';
+    document.querySelectorAll('.dock-tab').forEach((b) => {
+      b.classList.toggle('active', b.dataset.tab === openTab);
+    });
+  }
+  document.querySelectorAll('.dock-tab').forEach((b) => {
+    b.addEventListener('click', () => {
+      openTab = openTab === b.dataset.tab ? null : b.dataset.tab;
+      renderDock();
+    });
+  });
+  renderDock();
+}
 
 /* ============================================================
    6. FONDO, PRECIOS Y QR DESDE EL SPREADSHEET
@@ -841,6 +1114,8 @@ async function loadConfig() {
   } finally {
     updatePrice();
     hideLoading();
+    // Los letreros esperan a que el overlay de carga se quite: si no, quedan debajo.
+    setTimeout(startTour, 600);
   }
 }
 loadConfig();
@@ -953,6 +1228,7 @@ document.getElementById('btnConfirm').addEventListener('click', () => {
     alert('El precio todavía se está cargando desde el spreadsheet — espera un momento.');
     return;
   }
+  closeTip();                 // el formulario manda: ningún letrero encima
   setOrderStatus('', null);
   orderModal.style.display = 'flex';
 });
