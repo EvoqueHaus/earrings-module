@@ -203,6 +203,25 @@
   .whatsapp-row { display: grid; grid-template-columns: 130px 1fr; gap: 8px; }
   .whatsapp-row label { grid-column: 1 / -1; }
 
+  /* En escritorio el formulario se abre a dos columnas: datos a la izquierda,
+     pago y comprobante a la derecha. Así deja de ser una tira vertical que
+     obliga a hacer scroll dentro del modal. */
+  #orderModal .form-grid { display: block; }
+  #orderModal .form-col > *:first-child { margin-top: 0; }
+
+  html:not(.is-mobile) #orderModal .card { width: 800px; padding: 30px 34px; }
+  html:not(.is-mobile) #orderModal .form-grid {
+    display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 0 30px; align-items: start;
+  }
+  html:not(.is-mobile) #orderModal .whatsapp-row { grid-template-columns: 160px 1fr; }
+  html:not(.is-mobile) #orderModal #qrBlock { margin-top: 0; }
+  html:not(.is-mobile) #orderModal .row { margin-top: 22px; }
+  @media (max-width: 820px) {
+    html:not(.is-mobile) #orderModal .card { width: 380px; padding: 26px 28px; }
+    html:not(.is-mobile) #orderModal .form-grid { display: block; }
+    html:not(.is-mobile) #orderModal #qrBlock { margin-top: 18px; }
+  }
+
   #qrBlock {
     margin-top: 18px; padding: 14px; border-radius: 10px;
     background: rgba(255,255,255,0.03); border: 1px solid var(--line);
@@ -283,10 +302,10 @@
   }
 
   /* ---------- LAYOUT DE CELULAR ----------
-     Arriba: los tres pasos. Abajo: acabado, giro y vástago en pestañas, con
-     el precio y el botón de confirmar siempre visibles. El panel lateral no
-     existe aquí, así que nada se superpone. */
-  .is-mobile #topbar { padding: 10px 14px; }
+     Arriba: los tres pasos, bajados lo suficiente para que el encabezado del
+     sitio que incrusta la app no los pise. Abajo: acabado, giro y vástago en
+     pestañas, con el precio y el botón de confirmar siempre visibles. */
+  .is-mobile #topbar { padding: calc(10px + env(safe-area-inset-top)) 14px 10px; }
   .is-mobile #topbar h1 { font-size: 13px; }
   .is-mobile #hint { display: none; }
   .is-mobile #backLink { display: none; }
@@ -294,7 +313,7 @@
   .is-mobile #stepper { display: none; }
 
   .is-mobile #mobileSteps {
-    position: absolute; top: 42px; left: 10px; right: 10px; z-index: 6;
+    position: absolute; top: calc(84px + env(safe-area-inset-top)); left: 10px; right: 10px; z-index: 6;
     display: flex; gap: 6px;
     background: rgba(22,22,22,0.94);
     border: 1px solid var(--line); border-radius: 10px; padding: 5px;
@@ -415,38 +434,44 @@
       <h2>Confirmar pedido</h2>
       <p class="subtitle">Completa tus datos, realiza el pago y sube el comprobante.</p>
       <form id="orderForm">
-        <label for="ofName">Nombre completo</label>
-        <input id="ofName" type="text" autocomplete="given-name" required>
+        <div class="form-grid">
+          <div class="form-col">
+            <label for="ofName">Nombre completo</label>
+            <input id="ofName" type="text" autocomplete="given-name" required>
 
-        <label for="ofLastName">Apellidos completos</label>
-        <input id="ofLastName" type="text" autocomplete="family-name" required>
+            <label for="ofLastName">Apellidos completos</label>
+            <input id="ofLastName" type="text" autocomplete="family-name" required>
 
-        <label for="ofEmail">Correo electrónico</label>
-        <input id="ofEmail" type="email" autocomplete="email" required>
+            <label for="ofEmail">Correo electrónico</label>
+            <input id="ofEmail" type="email" autocomplete="email" required>
 
-        <div class="whatsapp-row">
-          <label for="ofWhatsapp">WhatsApp</label>
-          <select id="ofCountryCode" aria-label="Indicativo del país"></select>
-          <input id="ofWhatsapp" type="tel" inputmode="tel" placeholder="Número" required>
-        </div>
+            <div class="whatsapp-row">
+              <label for="ofWhatsapp">WhatsApp</label>
+              <select id="ofCountryCode" aria-label="Indicativo del país"></select>
+              <input id="ofWhatsapp" type="tel" inputmode="tel" placeholder="Número" required>
+            </div>
 
-        <div id="qrBlock">
-          <img id="qrImage" alt="Código QR de pago">
-          <p>Escanea este código QR para realizar el pago. Cuando lo hayas hecho, sube el comprobante en el siguiente campo.</p>
-          <button type="button" id="btnQrDownload">Descargar el código QR</button>
-        </div>
+            <label>¿Cómo prefieres recibirlo?</label>
+            <div class="delivery-row">
+              <button type="button" class="delivery-opt active" id="btnDeliveryPickup" data-method="recoge">Recoger en tienda</button>
+              <button type="button" class="delivery-opt" id="btnDeliveryShip" data-method="envio">Enviar a domicilio</button>
+            </div>
+            <div id="addressField" style="display:none;">
+              <label for="ofAddress">Dirección de envío</label>
+              <textarea id="ofAddress" placeholder="Dirección completa, ciudad y referencias"></textarea>
+            </div>
+          </div>
 
-        <label for="ofReceipt">Comprobante de pago</label>
-        <input id="ofReceipt" type="file" accept="image/*" required>
+          <div class="form-col">
+            <div id="qrBlock">
+              <img id="qrImage" alt="Código QR de pago">
+              <p>Escanea este código QR para realizar el pago. Cuando lo hayas hecho, sube el comprobante en el siguiente campo.</p>
+              <button type="button" id="btnQrDownload">Descargar el código QR</button>
+            </div>
 
-        <label>¿Cómo prefieres recibirlo?</label>
-        <div class="delivery-row">
-          <button type="button" class="delivery-opt active" id="btnDeliveryPickup" data-method="recoge">Recoger en tienda</button>
-          <button type="button" class="delivery-opt" id="btnDeliveryShip" data-method="envio">Enviar a domicilio</button>
-        </div>
-        <div id="addressField" style="display:none;">
-          <label for="ofAddress">Dirección de envío</label>
-          <textarea id="ofAddress" placeholder="Dirección completa, ciudad y referencias"></textarea>
+            <label for="ofReceipt">Comprobante de pago</label>
+            <input id="ofReceipt" type="file" accept="image/*" required>
+          </div>
         </div>
 
         <div id="orderStatus"></div>
@@ -546,10 +571,10 @@ function hideLoading() {
 showLoading('Cargando tu diseño…');
 
 /* ============================================================
-   GLOBOS DE AYUDA — un letrero a la vez, anclado al control del
-   que habla. Mismas reglas que en el editor: ✕ o "Entendido"
-   para cerrarlo, "No mostrar más" para apagarlos por esta
-   sesión y el botón "?" del encabezado para reactivarlos.
+   GLOBOS DE AYUDA — mismas reglas que en el editor: uno a la vez,
+   en cola, nunca encima del overlay de carga ni del formulario de
+   pedido, y solo cuando el control del que hablan ya está en
+   pantalla.
    ============================================================ */
 const TOUR_KEY = 'topitos-tour-3d';
 const TOUR_OFF_KEY = TOUR_KEY + ':off';
@@ -558,10 +583,26 @@ let tourSeen = new Set();
 try { tourSeen = new Set(JSON.parse(sessionStorage.getItem(TOUR_KEY) || '[]')); } catch (e) {}
 let tourOff = false;
 try { tourOff = sessionStorage.getItem(TOUR_OFF_KEY) === '1'; } catch (e) {}
+
 let activeTip = null;
+let tourQueue = [];
+let pumpTimer = null;
 
 function saveTourSeen() {
   try { sessionStorage.setItem(TOUR_KEY, JSON.stringify(Array.from(tourSeen))); } catch (e) {}
+}
+
+function uiIsBusy() {
+  if (document.getElementById('loadingOverlay').style.display === 'flex') return true;
+  if (document.getElementById('orderModal').style.display === 'flex') return true;
+  return false;
+}
+
+function isOnScreen(el) {
+  if (!el || !el.isConnected) return false;
+  const r = el.getBoundingClientRect();
+  if (!r.width || !r.height) return false;
+  return r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth;
 }
 
 function closeTip() {
@@ -571,10 +612,38 @@ function closeTip() {
   activeTip = null;
 }
 
-function showTip(id, text, target, next) {
-  if (tourOff || tourSeen.has(id)) return;
-  if (activeTip) return;
+function clearTipQueue() {
+  tourQueue = [];
+  clearTimeout(pumpTimer);
+}
 
+function queueTips(list) {
+  if (tourOff) return;
+  tourQueue = list
+    .filter(t => !tourSeen.has(t.id))
+    .map(t => ({ id: t.id, text: t.text, target: t.target, tries: 0 }));
+  pumpQueue();
+}
+
+function pumpQueue() {
+  clearTimeout(pumpTimer);
+  if (activeTip || !tourQueue.length) return;
+
+  const next = tourQueue[0];
+  const target = typeof next.target === 'function' ? next.target() : next.target;
+
+  if (uiIsBusy() || !isOnScreen(target)) {
+    next.tries++;
+    if (next.tries > 40) tourQueue.shift();
+    pumpTimer = setTimeout(pumpQueue, 250);
+    return;
+  }
+
+  tourQueue.shift();
+  renderTip(next.id, next.text, target);
+}
+
+function renderTip(id, text, target) {
   const tip = document.createElement('div');
   tip.className = 'tour-tip';
   tip.innerHTML =
@@ -606,27 +675,34 @@ function showTip(id, text, target, next) {
   window.addEventListener('resize', place);
   activeTip = { id: id, el: tip, place: place };
 
-  const markSeen = () => { tourSeen.add(id); saveTourSeen(); closeTip(); };
+  const markSeen = () => {
+    tourSeen.add(id);
+    saveTourSeen();
+    closeTip();
+    pumpTimer = setTimeout(pumpQueue, 250);
+  };
   tip.querySelector('.tour-close').addEventListener('click', markSeen);
-  tip.querySelector('.tour-ok').addEventListener('click', () => {
-    markSeen();
-    if (typeof next === 'function') setTimeout(next, 150);
-  });
+  tip.querySelector('.tour-ok').addEventListener('click', markSeen);
   tip.querySelector('.tour-skip').addEventListener('click', () => {
     tourOff = true;
     try { sessionStorage.setItem(TOUR_OFF_KEY, '1'); } catch (e) {}
+    clearTipQueue();
     closeTip();
   });
 }
 
 function startTour() {
   if (isMobile) {
-    showTip('controles', 'Toca cada pestaña para cambiar el acabado, girar la pieza o mover el vástago.', document.getElementById('dockTabs'),
-      () => showTip('precio', 'El precio sale del largo de tu figura y ya cubre el par de aretes. Confirma cuando esté lista.', document.getElementById('btnConfirm'),
-        () => showTip('volver', 'Puedes volver a cambiar el motivo o su tamaño cuando quieras: tu diseño se conserva.', document.getElementById('mobileSteps'))));
+    queueTips([
+      { id: 'controles', text: 'Toca cada pestaña para cambiar el acabado, girar la pieza o mover el vástago.', target: () => document.getElementById('dockTabs') },
+      { id: 'precio', text: 'El precio sale del largo de tu figura y ya cubre el par de aretes. Confirma cuando esté lista.', target: () => document.getElementById('btnConfirm') },
+      { id: 'volver', text: 'Puedes volver a cambiar el motivo o su tamaño cuando quieras: tu diseño se conserva.', target: () => document.getElementById('mobileSteps') },
+    ]);
   } else {
-    showTip('controles', 'Desde aquí eliges el acabado, giras la pieza y mueves el vástago (W para moverlo, E para rotarlo).', document.getElementById('rightPanel'),
-      () => showTip('precio', 'El precio sale del largo de tu figura y ya cubre el par de aretes. Confirma cuando esté lista.', document.getElementById('btnConfirm')));
+    queueTips([
+      { id: 'controles', text: 'Desde aquí eliges el acabado, giras la pieza y mueves el vástago (W para moverlo, E para rotarlo).', target: () => document.getElementById('rightPanel') },
+      { id: 'precio', text: 'El precio sale del largo de tu figura y ya cubre el par de aretes. Confirma cuando esté lista.', target: () => document.getElementById('btnConfirm') },
+    ]);
   }
 }
 
@@ -636,6 +712,7 @@ document.getElementById('btnHelp').addEventListener('click', () => {
   tourOff = false;
   try { sessionStorage.removeItem(TOUR_OFF_KEY); } catch (e) {}
   closeTip();
+  clearTipQueue();
   startTour();
 });
 
@@ -1115,7 +1192,7 @@ async function loadConfig() {
     updatePrice();
     hideLoading();
     // Los letreros esperan a que el overlay de carga se quite: si no, quedan debajo.
-    setTimeout(startTour, 600);
+    setTimeout(startTour, 500);
   }
 }
 loadConfig();
@@ -1229,6 +1306,7 @@ document.getElementById('btnConfirm').addEventListener('click', () => {
     return;
   }
   closeTip();                 // el formulario manda: ningún letrero encima
+  clearTipQueue();
   setOrderStatus('', null);
   orderModal.style.display = 'flex';
 });
