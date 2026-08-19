@@ -109,6 +109,7 @@
   button:disabled { color: var(--text-dim); cursor: not-allowed; opacity: 0.5; }
   button.primary { background: var(--accent); color: #0a0a0a; font-weight: 600; }
   button.primary:hover:not(:disabled) { background: #d8d8d8; }
+  button.primary:disabled { background: rgba(255,255,255,0.22); color: rgba(255,255,255,0.55); opacity: 1; }
   button.danger { color: var(--danger); }
   button.active { border-color: var(--accent); color: var(--accent); }
 
@@ -241,7 +242,7 @@
 
   /* ---------- COMPUERTA DE TÉRMINOS Y CONDICIONES ---------- */
   #termsGate {
-    position: fixed; inset: 0; z-index: 40;
+    position: fixed; inset: 0; z-index: 46;
     background: var(--bg);
     display: flex; align-items: center; justify-content: center;
     padding: 20px;
@@ -282,10 +283,10 @@
   #mobileScalePanel input[type=range] { width: 100%; accent-color: var(--accent); }
 
   /* ---------- GLOBOS DE AYUDA ----------
-     Un letrero a la vez, anclado al control del que habla. Se cierran con la
-     ✕ o con "Entendido"; "No mostrar más" los apaga hasta la próxima sesión,
-     y el botón "?" del encabezado los vuelve a encender cuando el usuario
-     quiera. */
+     Un letrero a la vez, anclado al control del que habla, y solo cuando ese
+     control ya está en pantalla y no hay nada encima (prelude, términos o
+     carga). Se cierran con la ✕ o con "Entendido"; "No mostrar más" los apaga
+     hasta la próxima sesión, y el botón "?" del encabezado los reactiva. */
   #tourLayer { position: fixed; inset: 0; z-index: 45; pointer-events: none; }
   .tour-tip {
     position: absolute; width: 250px; max-width: calc(100vw - 24px);
@@ -346,14 +347,17 @@
   /* ---------- LAYOUT DE CELULAR ----------
      Solo cuando el editor está de verdad en modo móvil (pantalla pequeña +
      táctil). Arriba: pasos. Abajo: escala. Nada más compite por el espacio,
-     así que ninguna barra tapa a otra. */
-  .is-mobile #topbar { padding: 10px 14px; }
+     así que ninguna barra tapa a otra.
+
+     La barra de pasos baja lo suficiente para que, incrustado el sitio en
+     otra página, el encabezado del contenedor padre no la pise. */
+  .is-mobile #topbar { padding: calc(10px + env(safe-area-inset-top)) 14px 10px; }
   .is-mobile #topbar h1 { font-size: 13px; }
   .is-mobile #hint { display: none; }
 
   .is-mobile #stepper { display: none; }
   .is-mobile #mobileSteps {
-    position: absolute; top: 42px; left: 10px; right: 10px; z-index: 6;
+    position: absolute; top: calc(84px + env(safe-area-inset-top)); left: 10px; right: 10px; z-index: 6;
     display: flex; gap: 6px;
     background: rgba(22,22,22,0.94);
     border: 1px solid var(--line); border-radius: 10px; padding: 5px;
@@ -366,8 +370,8 @@
   .is-mobile #areaNotice { display: none; }
 
   /* Los avisos van debajo de la barra de pasos, nunca encima de ella. */
-  .is-mobile #readout { top: 96px; left: 14px; font-size: 11px; max-width: calc(100% - 28px); }
-  .is-mobile #warning { top: 96px; }
+  .is-mobile #readout { top: calc(138px + env(safe-area-inset-top)); left: 14px; font-size: 11px; max-width: calc(100% - 28px); }
+  .is-mobile #warning { top: calc(138px + env(safe-area-inset-top)); }
 
   /* La escala es la única barra inferior: a lo ancho y anclada a la pantalla. */
   .is-mobile #mobileScalePanel {
@@ -420,7 +424,7 @@
 
   <div id="readout"></div>
   <div id="areaNotice">Área máxima de trabajo: 10 × 10&nbsp;mm</div>
-  <div id="warning">El puente entre el agujero y el borde es menor a 1&nbsp;mm — ajusta el agujero para continuar.</div>
+  <div id="warning"></div>
 
   <div id="tracePanel">
     <h2>Imagen de calco</h2>
@@ -532,6 +536,10 @@ const MIN_BRIDGE_MM = 1;
 const MIN_ZOOM = 8;
 const MAX_ZOOM = 400;
 
+/* Tolerancia de desborde: por debajo de esto la diferencia no es real, es
+   ruido de coma flotante del escalado. */
+const AREA_TOLERANCE_MM = 0.02;
+
 const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwHpQClCShIfaBiqcGR1mFdFM01beozZrGOUMLVQcPMO-V-mRzwqpq9yaMUScxfbwpc/exec';
 const DESIGN_KEY = 'topitos-design';
 const TRACE_KEY = 'topitos-trace';
@@ -602,10 +610,13 @@ function hideLoading() {
 }
 
 /* ============================================================
-   GLOBOS DE AYUDA — un letrero a la vez, pegado al control del
-   que habla. Se cierran con ✕ o con "Entendido"; "No mostrar
-   más" los apaga hasta la próxima sesión y el botón "?" del
-   encabezado los vuelve a encender.
+   GLOBOS DE AYUDA
+   Reglas duras:
+     · nunca por encima del prelude, de los términos o de la carga;
+     · nunca antes de que el control del que hablan esté en pantalla;
+     · uno a la vez, en cola, y el siguiente solo tras cerrar el anterior.
+   Si el control nunca aparece (porque el usuario tomó otro camino), el
+   letrero se descarta en silencio en vez de quedar esperando.
    ============================================================ */
 const TOUR_KEY = 'topitos-tour-editor';
 const TOUR_OFF_KEY = TOUR_KEY + ':off';
@@ -614,10 +625,33 @@ let tourSeen = new Set();
 try { tourSeen = new Set(JSON.parse(sessionStorage.getItem(TOUR_KEY) || '[]')); } catch (e) {}
 let tourOff = false;
 try { tourOff = sessionStorage.getItem(TOUR_OFF_KEY) === '1'; } catch (e) {}
+
 let activeTip = null;
+let tourQueue = [];
+let pumpTimer = null;
 
 function saveTourSeen() {
   try { sessionStorage.setItem(TOUR_KEY, JSON.stringify(Array.from(tourSeen))); } catch (e) {}
+}
+
+/* "Hay algo encima que exige una decisión" — mientras sea cierto, ningún
+   letrero se pinta. Esto es lo que evita que la ayuda aparezca sobre la
+   compuerta de términos y condiciones. */
+function uiIsBusy() {
+  if (!preludeDone || !termsDone) return true;
+  const prelude = $('prelude');
+  if (prelude && prelude.isConnected) return true;
+  const gate = $('termsGate');
+  if (gate && gate.style.display !== 'none') return true;
+  if ($('loadingOverlay').style.display === 'flex') return true;
+  return false;
+}
+
+function isOnScreen(el) {
+  if (!el || !el.isConnected) return false;
+  const r = el.getBoundingClientRect();
+  if (!r.width || !r.height) return false;
+  return r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth;
 }
 
 function closeTip() {
@@ -627,10 +661,38 @@ function closeTip() {
   activeTip = null;
 }
 
-function showTip(id, text, target, next) {
-  if (tourOff || tourSeen.has(id)) return;
-  if (activeTip) return;               // nunca dos letreros encima del otro
+function clearTipQueue() {
+  tourQueue = [];
+  clearTimeout(pumpTimer);
+}
 
+function queueTips(list) {
+  if (tourOff) return;
+  tourQueue = list
+    .filter(t => !tourSeen.has(t.id))
+    .map(t => ({ id: t.id, text: t.text, target: t.target, tries: 0 }));
+  pumpQueue();
+}
+
+function pumpQueue() {
+  clearTimeout(pumpTimer);
+  if (activeTip || !tourQueue.length) return;
+
+  const next = tourQueue[0];
+  const target = typeof next.target === 'function' ? next.target() : next.target;
+
+  if (uiIsBusy() || !isOnScreen(target)) {
+    next.tries++;
+    if (next.tries > 40) tourQueue.shift();   // ~10s esperando: ese paso ya no aplica
+    pumpTimer = setTimeout(pumpQueue, 250);
+    return;
+  }
+
+  tourQueue.shift();
+  renderTip(next.id, next.text, target);
+}
+
+function renderTip(id, text, target) {
   const tip = document.createElement('div');
   tip.className = 'tour-tip';
   tip.innerHTML =
@@ -662,45 +724,85 @@ function showTip(id, text, target, next) {
   window.addEventListener('resize', place);
   activeTip = { id: id, el: tip, place: place };
 
-  const markSeen = () => { tourSeen.add(id); saveTourSeen(); closeTip(); };
+  const markSeen = () => {
+    tourSeen.add(id);
+    saveTourSeen();
+    closeTip();
+    pumpTimer = setTimeout(pumpQueue, 250);
+  };
   tip.querySelector('.tour-close').addEventListener('click', markSeen);
-  tip.querySelector('.tour-ok').addEventListener('click', () => {
-    markSeen();
-    if (typeof next === 'function') setTimeout(next, 150);
-  });
+  tip.querySelector('.tour-ok').addEventListener('click', markSeen);
   tip.querySelector('.tour-skip').addEventListener('click', () => {
     tourOff = true;
     try { sessionStorage.setItem(TOUR_OFF_KEY, '1'); } catch (e) {}
+    clearTipQueue();
     closeTip();
   });
 }
 
-/* Qué letrero corresponde según dónde está parado el usuario. */
-function tipForStage() {
-  if (catalogScreen.style.display === 'flex') {
-    showTip('catalogo', 'Busca por etiqueta y toca el motivo que quieras: se carga de una vez en el área de trabajo.', $('catalogSearch'));
+/* Qué letreros corresponden según dónde está parado el usuario. */
+function tipsForStage() {
+  if (tourOff) return;
+  const catalogEl = $('catalogScreen');
+  const importEl = $('importScreen');
+
+  if (catalogEl.style.display === 'flex') {
+    queueTips([{
+      id: 'catalogo',
+      text: 'Busca por etiqueta y toca el motivo que quieras: se carga de una vez en el área de trabajo.',
+      target: () => $('catalogSearch'),
+    }]);
     return;
   }
-  if (importScreen.style.display !== 'none') {
+
+  if (importEl.style.display !== 'none') {
     if (isMobile) {
-      showTip('inicio', 'Empieza aquí: elige un motivo de la biblioteca para tu Topito.', $('btnCatalog'),
-        () => showTip('pasos', 'Con estos tres botones te mueves entre importar el motivo, ajustar su tamaño y verlo en 3D.', $('mobileSteps')));
+      queueTips([
+        { id: 'inicio', text: 'Empieza aquí: elige un motivo de la biblioteca para tu Topito.', target: () => $('btnCatalog') },
+        { id: 'pasos', text: 'Con estos tres botones te mueves entre importar el motivo, ajustar su tamaño y verlo en 3D.', target: () => $('mobileSteps') },
+      ]);
     } else {
-      showTip('inicio', 'Empieza aquí: sube tu archivo, elige un motivo de la biblioteca o dibuja tu figura a mano.', $('btnCatalog'));
+      queueTips([
+        { id: 'inicio', text: 'Empieza aquí: sube tu archivo, elige un motivo de la biblioteca o dibuja tu figura a mano.', target: () => $('btnCatalog') },
+      ]);
     }
     return;
   }
+
   if (isMobile) {
-    showTip('escala', 'Ajusta el tamaño de tu figura con esta barra. El cuadro de la pantalla es el área real de 10 × 10 mm.', mobileScaleSlider,
-      () => showTip('ver3d', 'Cuando te guste, toca "Ver en 3D" para elegir el acabado y confirmar tu pedido.', $('btnMobileAdvance')));
+    queueTips([
+      {
+        id: 'escala',
+        text: 'Ajusta el tamaño con esta barra. El cuadro de la pantalla es el área real de 10 × 10 mm: si la figura se sale, no podrás continuar.',
+        target: () => (mobileScalePanel.style.display === 'none' ? null : mobileScaleSlider),
+      },
+      {
+        id: 'ver3d',
+        text: 'Cuando te guste, toca "Ver en 3D" para elegir el acabado y confirmar tu pedido.',
+        target: () => $('btnMobileAdvance'),
+      },
+    ]);
   } else {
-    showTip('dibujo', 'Cierra la figura volviendo al primer punto. Después puedes suavizar el trazo, editar nodos o agregar un agujero, y aceptar el diseño.', $('actionbar'));
+    queueTips([{
+      id: 'dibujo',
+      text: 'Cierra la figura volviendo al primer punto. Después puedes suavizar el trazo, editar nodos o agregar un agujero, y aceptar el diseño.',
+      target: () => $('actionbar'),
+    }]);
   }
 }
 
 function maybeStartTour() {
-  if (!preludeDone || !termsDone) return;
-  setTimeout(tipForStage, 400);
+  if (uiIsBusy()) return;
+  setTimeout(tipsForStage, 350);
+}
+
+/* Cambio de etapa: se descarta lo que estuviera pendiente y se arma la cola
+   del lugar nuevo — así ningún letrero llega tarde, hablando de una pantalla
+   que el usuario ya dejó atrás. */
+function refreshTipsForStage(delay) {
+  closeTip();
+  clearTipQueue();
+  pumpTimer = setTimeout(tipsForStage, delay || 300);
 }
 
 $('btnHelp').addEventListener('click', () => {
@@ -708,8 +810,7 @@ $('btnHelp').addEventListener('click', () => {
   saveTourSeen();
   tourOff = false;
   try { sessionStorage.removeItem(TOUR_OFF_KEY); } catch (e) {}
-  closeTip();
-  tipForStage();
+  refreshTipsForStage(60);
 });
 
 /* ============================================================
@@ -824,6 +925,7 @@ let isPanning = false;
 let nodeEditMode = false;
 let activeNodeHit = null;
 let bridgeOk = true;
+let insideOk = true;
 
 let traceRaster = null;
 let traceLocked = false;
@@ -1079,18 +1181,54 @@ function minBridgeDistance(outer, hole) {
   return min;
 }
 
-/* El puente mínimo bloquea el paso al 3D, no solo avisa — tanto en el botón
-   de escritorio como en el de celular. */
+/* Caja real que ocupa el diseño completo (contorno + agujero). */
+function designBounds() {
+  if (!outerPath) return null;
+  let b = outerPath.bounds;
+  if (holePath) b = b.unite(holePath.bounds);
+  return b;
+}
+
+/* El cuadro de 10 × 10 mm es el límite físico de la pieza: si el motivo
+   escalado se sale, el diseño no es fabricable y no puede pasar al 3D. */
+function fitsInSquare() {
+  const b = designBounds();
+  if (!b) return true;
+  return b.left >= -AREA_TOLERANCE_MM
+      && b.top >= -AREA_TOLERANCE_MM
+      && b.right <= SQUARE_MM + AREA_TOLERANCE_MM
+      && b.bottom <= SQUARE_MM + AREA_TOLERANCE_MM;
+}
+
+/* Puente mínimo y desborde del área bloquean el paso al 3D, no solo avisan —
+   tanto en el botón de escritorio como en el de celular. El trazo se pinta
+   en rojo mientras se sale, para que el motivo del bloqueo sea visible. */
 function revalidateBridge() {
   if (holePath && holePath.closed && outerPath && outerPath.closed) {
     bridgeOk = minBridgeDistance(outerPath, holePath) >= MIN_BRIDGE_MM;
   } else {
     bridgeOk = true;
   }
-  warning.style.display = bridgeOk ? 'none' : 'block';
+
+  insideOk = fitsInSquare();
+
+  if (!insideOk) {
+    warning.textContent = 'La figura se sale del área de 10 × 10 mm — reduce el tamaño para continuar.';
+    warning.style.display = 'block';
+  } else if (!bridgeOk) {
+    warning.textContent = 'El puente entre el agujero y el borde es menor a 1 mm — ajusta el agujero para continuar.';
+    warning.style.display = 'block';
+  } else {
+    warning.style.display = 'none';
+  }
+
+  const stroke = insideOk ? '#ececef' : '#d16565';
+  if (outerPath) outerPath.strokeColor = stroke;
+  if (holePath) holePath.strokeColor = stroke;
+
   const ready = !!outerPath && outerPath.closed && mode !== 'hole';
-  btnAccept.disabled = !(ready && bridgeOk);
-  $('btnMobileAdvance').disabled = !(ready && bridgeOk);
+  btnAccept.disabled = !(ready && bridgeOk && insideOk);
+  $('btnMobileAdvance').disabled = !(ready && bridgeOk && insideOk);
 }
 
 btnSmooth.addEventListener('click', () => {
@@ -1302,7 +1440,7 @@ async function applyConfig() {
 /* ---------- PRELUDE ---------- */
 async function runPrelude() {
   const prelude = $('prelude');
-  if (window.__preludeSeen) { preludeDone = true; maybeStartTour(); return; }
+  if (window.__preludeSeen) { preludeDone = true; if (prelude) prelude.remove(); maybeStartTour(); return; }
 
   // Si la configuración tarda, se revela la app igual: nadie espera 8s por un logo.
   const data = await Promise.race([
@@ -1380,6 +1518,7 @@ function deserializePath(data) {
 function acceptDesign() {
   if (!outerPath || !outerPath.closed) { flash('Cierra el contorno antes de aceptar.'); return; }
   revalidateBridge();
+  if (!insideOk) { flash('La figura se sale del área de 10 × 10 mm — reduce su tamaño para continuar.'); return; }
   if (!bridgeOk) { flash('El puente mínimo es de 1mm — ajusta el agujero.'); return; }
 
   const totalLengthMm = outerPath.length + (holePath ? holePath.length : 0);
@@ -1444,7 +1583,8 @@ function restoreSession() {
   }
 
   /* Al volver del 3D en celular, la barra de escala tiene que reaparecer:
-     es el único control del paso 2 allí. */
+     es el único control del paso 2 allí. La escala mostrada se deduce del
+     tamaño real recuperado, no se asume 100%. */
   if (restored && isMobile) {
     mobileScaleFactor = 1;
     mobileScaleSlider.value = 100;
@@ -1470,6 +1610,7 @@ function closeImportScreen() {
   stepImport.classList.remove('active');
   stepDraw.classList.add('active');
   syncMobileSteps();
+  refreshTipsForStage(450);
 }
 
 /* Volver al paso 1 sin perder lo ya dibujado: solo reabre la pantalla de
@@ -1482,6 +1623,7 @@ function openImportScreen() {
   stepImport.classList.add('active');
   stepDraw.classList.remove('active');
   syncMobileSteps();
+  refreshTipsForStage(350);
 }
 
 function setImportStatus(text, isError) {
@@ -1662,8 +1804,8 @@ async function importDXFDesign(dxfText) {
 
 /* ============================================================
    BIBLIOTECA DE MOTIVOS
-   Los SVG se piden a través del Web App (evita el bloqueo CORS de
-   Drive) y se cachean en localStorage para no volver a descargarlos.
+   Los SVG se piden a través del CDN y se cachean en localStorage
+   para no volver a descargarlos.
    ============================================================ */
 const catalogScreen = $('catalogScreen');
 const catalogGrid = $('catalogGrid');
@@ -1679,6 +1821,7 @@ $('btnCatalog').addEventListener('click', openCatalog);
 $('btnCatalogClose').addEventListener('click', () => {
   catalogScreen.style.display = 'none';
   syncMobileSteps();
+  refreshTipsForStage(300);
 });
 
 async function openCatalog() {
@@ -1691,6 +1834,7 @@ async function openCatalog() {
     hideLoading();
   }
   renderCatalog();
+  refreshTipsForStage(300);
 }
 
 /* Buscador con coincidencia por prefijo: "flor" encuentra las etiquetas
@@ -1762,11 +1906,7 @@ async function chooseMotif(item, i) {
     const svgText = await fetchMotifSVG(item.svg);
     importSVGDesign(svgText);
     catalogScreen.style.display = 'none';
-    closeImportScreen();
-    if (isMobile) {
-      closeTip();
-      setTimeout(tipForStage, 350);   // ya está en el paso de escalar: se explica ahí
-    }
+    closeImportScreen();   // deja la ayuda del paso de escalar en cola
   } catch (err) {
     console.error(err);
     setCatalogStatus('No se pudo cargar ese motivo: ' + err.message, true);
@@ -1801,6 +1941,7 @@ mobileScaleSlider.addEventListener('input', (e) => {
   if (holePath) holePath.scale(relative, center);
   mobileScaleFactor = percent / 100;
   $('mobileScaleVal').textContent = percent + '%';
+  // Si al crecer se sale del cuadro, revalidateBridge bloquea el paso al 3D.
   revalidateBridge();
 });
 
@@ -1856,7 +1997,12 @@ function syncMobileSteps() {
 }
 
 mstepImport.addEventListener('click', () => {
-  if (catalogScreen.style.display === 'flex') { catalogScreen.style.display = 'none'; syncMobileSteps(); return; }
+  if (catalogScreen.style.display === 'flex') {
+    catalogScreen.style.display = 'none';
+    syncMobileSteps();
+    refreshTipsForStage(300);
+    return;
+  }
   openImportScreen();
 });
 
