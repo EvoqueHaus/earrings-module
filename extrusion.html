@@ -970,7 +970,11 @@ function buildDefaultStem() {
 
 /* Reemplaza el poste de los dos aretes por una copia del modelo dado. El grupo
    "stem" en sí no se toca: es al que está agarrado el Control de Movimiento y
-   el que guarda la posición/inclinación elegida por el cliente. */
+   el que guarda la posición/inclinación elegida por el cliente.
+
+   OJO con el orden: llama a applyState(), que lee stemPos, stemQuat y
+   pivotQuat. Esos son const declarados más abajo, así que la PRIMERA llamada
+   tiene que ocurrir después de ese bloque de estado — nunca aquí arriba. */
 function setStemContent(template) {
   [A, B].forEach((E) => {
     while (E.stem.children.length) E.stem.remove(E.stem.children[0]);
@@ -978,7 +982,6 @@ function setStemContent(template) {
   });
   applyState();
 }
-setStemContent(buildDefaultStem());
 
 /* ---------- Cotas flotantes ----------
    Se anclan como hijas de A.pieceHolder, así que heredan exactamente la
@@ -1050,6 +1053,10 @@ function applyState() {
     E.pieceHolder.position.copy(pieceAnchor).sub(stemPos);
   });
 }
+
+/* Ya con el estado inicializado, se puede montar el poste por defecto.
+   Antes de esta línea, applyState() todavía no tiene con qué trabajar. */
+setStemContent(buildDefaultStem());
 
 /* Al arrastrar el poste, la figura no debe saltar: se recalcula su anclaje
    para que su posición en pantalla quede donde estaba antes del arrastre. */
