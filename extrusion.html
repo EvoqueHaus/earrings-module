@@ -525,6 +525,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
@@ -1103,17 +1106,29 @@ if (isMobile) {
    5b. TIPOS DE VÁSTAGO (.glb) — hoja "Vastago": A2:A la URL del
    modelo, B2:B el nombre que ve el cliente.
 
+   La descarga se hace con fetch a mano, no con GLTFLoader.load:
+   así se distingue un fallo de red/CORS (fetch revienta) de un
+   archivo que llegó bien pero no se pudo interpretar (parse). El
+   loader trae registrados Draco, Meshopt y KTX2, que son las tres
+   compresiones que exportan Rhino, Blender y los conversores en
+   línea — sin ellas, un .glb perfectamente descargado falla en el
+   parse y parece un problema de CORS.
+
    El modelo se normaliza al llegar: se orienta a lo largo de +Z,
    se escala a STEM_LENGTH_MM y se apoya su base en z = 0. Así
-   cualquier .glb, venga como venga exportado, encaja en el mismo
-   sitio que el poste dibujado por código y el Control de
-   Movimiento sigue funcionando igual.
-
-   Los .glb tienen que estar en un origen con CORS (Cloudinary, por
-   ejemplo). Drive no manda esas cabeceras y el navegador rechaza
-   la descarga.
+   cualquier .glb encaja en el mismo sitio que el poste dibujado
+   por código y el Control de Movimiento sigue funcionando igual.
    ============================================================ */
+const THREE_CDN = 'https://unpkg.com/three@0.166.0/examples/jsm/';
+
+const dracoLoader = new DRACOLoader().setDecoderPath(THREE_CDN + 'libs/draco/gltf/');
+const ktx2Loader = new KTX2Loader().setTranscoderPath(THREE_CDN + 'libs/basis/').detectSupport(renderer);
+
 const gltfLoader = new GLTFLoader();
+gltfLoader.setDRACOLoader(dracoLoader);
+gltfLoader.setKTX2Loader(ktx2Loader);
+gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+
 const stemTemplates = new Map();   // url → modelo ya normalizado
 let stemOptions = [{ name: 'Clásico', url: null }];
 let currentStemIndex = 0;
@@ -1128,7 +1143,7 @@ function setStemStatus(text, isError) {
 
 /* Los .glb de Drive se piden por el endpoint de descarga directa; aun así
    Drive no manda CORS, así que esto solo ayuda cuando el archivo se sirve
-   desde un proxy que sí las agrega. */
+   desde un proxy que sí las agrega. Cloudinary sí las manda. */
 function normalizeModelUrl(url) {
   if (typeof url !== 'string') return '';
   const clean = url.trim();
@@ -1137,15 +1152,55 @@ function normalizeModelUrl(url) {
   return clean;
 }
 
-function loadGLB(url) {
-  return new Promise((resolve, reject) => {
-    gltfLoader.load(
-      url,
-      (gltf) => resolve(gltf.scene),
-      undefined,
-      () => reject(new Error('el modelo no se pudo descargar (revisa la URL y que el origen permita CORS)'))
-    );
-  });
+/* Baja el archivo y devuelve lo que GLTFLoader.parse sabe recibir: un
+   ArrayBuffer si es GLB binario, o el texto si es un .gltf en JSON. */
+async function fetchModelData(url) {
+  let res;
+  try {
+    res = await fetch(url, { mode: 'cors' });
+  } catch (err) {
+    throw new Error('el navegador no pudo descargarlo (origen sin CORS o URL inalcanzable)');
+  }
+  if (!res.ok) throw new Error('el servidor respondió ' + res.status);
+
+  const buffer = await res.arrayBuffer();
+  if (buffer.byteLength < 12) throw new Error('el archivo llegó vacío');
+
+  const magic = new TextDecoder().decode(new Uint8Array(buffer, 0, 4));
+  if (magic === 'glTF') return buffer;                    // GLB binario
+
+  const head = new TextDecoder().decode(new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 400))).trim();
+  if (head.charAt(0) === '{') return head.length === buffer.byteLength
+    ? head
+    : new TextDecoder().decode(new Uint8Array(buffer));   // .gltf en JSON
+
+  throw new Error('lo que llegó no es un glTF/GLB — empieza con “' + head.slice(0, 24).replace(/\s+/g, ' ') + '”');
+}
+
+/* Cloudinary entrega los .glb bajo /raw/upload/. Si la hoja tiene la variante
+   /image/upload/ y esa falla, se reintenta con la otra antes de darse por
+   vencido: es el error de copiado más común al armar el catálogo. */
+function urlCandidates(url) {
+  const list = [url];
+  if (url.indexOf('/image/upload/') > -1) list.push(url.replace('/image/upload/', '/raw/upload/'));
+  else if (url.indexOf('/raw/upload/') > -1) list.push(url.replace('/raw/upload/', '/image/upload/'));
+  return list;
+}
+
+async function loadGLB(url) {
+  let lastError = null;
+  for (const candidate of urlCandidates(url)) {
+    try {
+      const data = await fetchModelData(candidate);
+      const basePath = candidate.slice(0, candidate.lastIndexOf('/') + 1);
+      const gltf = await gltfLoader.parseAsync(data, basePath);
+      return gltf.scene;
+    } catch (err) {
+      console.warn('Vástago: falló ' + candidate, err);
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('no se pudo cargar el modelo');
 }
 
 /* Deja el modelo listo para ocupar el lugar del poste: eje largo hacia +Z,
@@ -1228,8 +1283,8 @@ async function selectStem(index, silent) {
     setStemStatus('');
     saveViewState();
   } catch (err) {
-    console.error(err);
-    setStemStatus('No se pudo cargar “' + opt.name + '”: ' + err.message, true);
+    console.error('No se pudo cargar el vástago "' + opt.name + '":', err);
+    setStemStatus('No se pudo cargar “' + opt.name + '”: ' + (err && err.message ? err.message : err), true);
   } finally {
     if (!silent) hideLoading();
     renderStemOptions(false);
