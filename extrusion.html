@@ -537,7 +537,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
    ============================================================ */
 const DESIGN_KEY = 'topitos-design';
 const VIEW_KEY = 'topitos-3d';
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbykn2ed3u8L7cb8I1gq9PvNRbQWXdk7IFvb5ohE6egPjP2W4JmTJU31chfFT7UOoj3S/exec';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxQOfNhcBw8g1Hv7Sdh_JjNQgrLymY5zo4hSpFUiN09K36-UUh1_q1r3MaPWhWfhgPo/exec';
 
 const isMobile = document.documentElement.classList.contains('is-mobile');
 
@@ -1696,7 +1696,7 @@ orderForm.addEventListener('submit', async (event) => {
    9. MINIATURAS — 4 vistas ligeras del diseño para la hoja Pedidos.
    ============================================================ */
 function captureThumbnails() {
-  const thumbSize = 120;
+  const thumbSize = 400;
   const tmpCanvas = document.createElement('canvas');
   tmpCanvas.width = thumbSize;
   tmpCanvas.height = thumbSize;
@@ -1723,7 +1723,7 @@ function captureThumbnails() {
     thumbCam.lookAt(v.target[0], v.target[1], v.target[2]);
     thumbCam.updateProjectionMatrix();
     tmpRenderer.render(scene, thumbCam);
-    thumbs[thumbKeys[i]] = tmpCanvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+    thumbs[thumbKeys[i]] = tmpCanvas.toDataURL('image/jpeg', 0.85).split(',')[1];
   });
 
   tmpRenderer.dispose();
