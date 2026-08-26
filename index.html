@@ -269,6 +269,21 @@
   }
   #catalogSearch:focus { outline: 1px solid var(--accent); }
 
+  /* ---------- PANEL DE ESCRITORIO ---------- */
+  #desktopScalePanel {
+    position: absolute; bottom: 110px; left: 50%; transform: translateX(-50%); z-index: 3;
+    width: 300px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: none;
+  }
+  #desktopScalePanel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 8px; }
+  #desktopScalePanel input[type=range] { width: 100%; accent-color: var(--accent); }
+  #desktopScalePanel .ref-row { display: flex; gap: 6px; margin-top: 10px; }
+  #desktopScalePanel .ref-row button { flex: 1; font-size: 12px; padding: 8px 6px; }
+
   /* ---------- PANEL DE ESCALA (solo móvil) ---------- */
   #mobileScalePanel {
     position: absolute; top: 56px; right: 16px; z-index: 5;
@@ -316,6 +331,7 @@
     #stepper { gap: 14px; padding: 12px 0; }
     .step-label { font-size: 10px; }
     #tracePanel { top: auto; bottom: 150px; right: 12px; left: 12px; width: auto; }
+    #desktopScalePanel { bottom: 160px; width: auto; left: 12px; right: 12px; transform: none; }
 
     /* El actionbar se vuelve un panel lateral colapsable "hacia un costado". */
     #actionbarWrap {
@@ -368,6 +384,7 @@
   .is-mobile #actionbarWrap { display: none !important; }
   .is-mobile #tracePanel { display: none !important; }
   .is-mobile #areaNotice { display: none; }
+  .is-mobile #desktopScalePanel { display: none !important; }
 
   /* Los avisos van debajo de la barra de pasos, nunca encima de ella. */
   .is-mobile #readout { top: calc(138px + env(safe-area-inset-top)); left: 14px; font-size: 11px; max-width: calc(100% - 28px); }
@@ -458,12 +475,23 @@
   <div id="actionbarWrap">
     <button id="actionbarToggle" type="button" aria-label="Mostrar u ocultar controles">‹</button>
     <div id="actionbar">
+      <button id="btnUndo" disabled title="Deshacer (Ctrl+Z)" aria-label="Deshacer">↶</button>
+      <button id="btnRedo" disabled title="Rehacer (Ctrl+Y)" aria-label="Rehacer">↷</button>
       <button id="btnTrace">Calcar imagen</button>
       <button id="btnSmooth" disabled>Suavizar trazo</button>
       <button id="btnHole" disabled>Agregar agujero interno</button>
       <button id="btnNodeEdit" disabled>Editar nodos</button>
       <button id="btnReset" class="danger">Reiniciar</button>
       <button id="btnAccept" class="primary" disabled>Aceptar diseño</button>
+    </div>
+  </div>
+
+  <div id="desktopScalePanel">
+    <h2>Escala del diseño</h2>
+    <div class="slider-label"><span>Escala</span><span id="desktopScaleVal">100%</span></div>
+    <input id="desktopScaleSlider" type="range" min="25" max="250" value="100">
+    <div class="ref-row">
+      <button id="btnDesktopScaleClose" class="primary">Cerrar</button>
     </div>
   </div>
 
@@ -919,6 +947,7 @@ drawLayer.activate();
 let outerPath = null;
 let holePath = null;
 let mode = 'outer';       // 'outer' | 'hole' | 'review-outer' | 'review-hole'
+let nodeDragChanged = false;
 let drawingSegment = null;
 let dragOrigin = null;
 let isPanning = false;
@@ -926,6 +955,83 @@ let nodeEditMode = false;
 let activeNodeHit = null;
 let bridgeOk = true;
 let insideOk = true;
+let noSelfIntersection = true;
+
+/* ============================================================
+   DESHACER / REHACER — pila de snapshots del path.
+   ============================================================ */
+const undoStack = [];
+const redoStack = [];
+const MAX_UNDO = 50;
+
+function snapshotPath(path) {
+  if (!path) return null;
+  return { segments: path.segments.map(s => [[s.point.x, s.point.y], [s.handleIn.x, s.handleIn.y], [s.handleOut.x, s.handleOut.y]]), closed: path.closed };
+}
+
+function restorePathData(data) {
+  if (!data) return null;
+  const p = newPath();
+  data.segments.forEach(s => {
+    p.add(new paper.Segment(new paper.Point(s[0][0], s[0][1]), new paper.Point(s[1][0], s[1][1]), new paper.Point(s[2][0], s[2][1])));
+  });
+  p.closed = !!data.closed;
+  return p;
+}
+
+function saveUndoState() {
+  undoStack.push({ outer: snapshotPath(outerPath), hole: snapshotPath(holePath), mode });
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  redoStack.length = 0;
+  updateUndoRedoButtons();
+}
+
+function doUndo() {
+  if (!undoStack.length) return;
+  redoStack.push({ outer: snapshotPath(outerPath), hole: snapshotPath(holePath), mode });
+  const state = undoStack.pop();
+  if (outerPath) outerPath.remove();
+  if (holePath) holePath.remove();
+  outerPath = restorePathData(state.outer);
+  holePath = restorePathData(state.hole);
+  mode = state.mode;
+  updateUndoRedoButtons();
+  updateUIAfterStateChange();
+}
+
+function doRedo() {
+  if (!redoStack.length) return;
+  undoStack.push({ outer: snapshotPath(outerPath), hole: snapshotPath(holePath), mode });
+  const state = redoStack.pop();
+  if (outerPath) outerPath.remove();
+  if (holePath) holePath.remove();
+  outerPath = restorePathData(state.outer);
+  holePath = restorePathData(state.hole);
+  mode = state.mode;
+  updateUndoRedoButtons();
+  updateUIAfterStateChange();
+}
+
+function updateUndoRedoButtons() {
+  $('btnUndo').disabled = !undoStack.length;
+  $('btnRedo').disabled = !redoStack.length;
+}
+
+function updateUIAfterStateChange() {
+  const hasClosed = outerPath && outerPath.closed;
+  btnSmooth.disabled = !hasClosed || mode === 'hole';
+  btnHole.disabled = !hasClosed;
+  btnHole.textContent = holePath ? 'Quitar agujero interno' : 'Agregar agujero interno';
+  btnNodeEdit.disabled = !hasClosed;
+  if (!hasClosed) {
+    nodeEditMode = false;
+    btnNodeEdit.classList.remove('active');
+    btnNodeEdit.textContent = 'Editar nodos';
+  }
+  if (outerPath) outerPath.fullySelected = nodeEditMode;
+  if (holePath) holePath.fullySelected = nodeEditMode;
+  revalidateBridge();
+}
 
 let traceRaster = null;
 let traceLocked = false;
@@ -1001,6 +1107,8 @@ tool.onMouseDown = (event) => {
     let hit = outerPath && outerPath.hitTest(event.point, hitOptions);
     if (!hit && holePath) hit = holePath.hitTest(event.point, hitOptions);
     activeNodeHit = hit || null;
+    if (activeNodeHit) saveUndoState();
+    nodeDragChanged = false;
     return;
   }
 
@@ -1012,6 +1120,7 @@ tool.onMouseDown = (event) => {
   if (activePath && activePath.segments.length > 2) {
     const start = activePath.firstSegment.point;
     if (point.getDistance(start) <= CLOSE_THRESHOLD_MM) {
+      saveUndoState();
       closeActivePath();
       return;
     }
@@ -1021,6 +1130,7 @@ tool.onMouseDown = (event) => {
   if (mode === 'hole' && !holePath) holePath = newPath();
 
   const path = mode === 'outer' ? outerPath : holePath;
+  saveUndoState();
   drawingSegment = path.add(point);
   lastSegmentAt = Date.now();
   dragOrigin = point;
@@ -1044,6 +1154,7 @@ tool.onMouseDrag = (event) => {
     if (activeNodeHit.type === 'segment') seg.point = clampToSquare(seg.point.add(event.delta));
     else if (activeNodeHit.type === 'handle-in') seg.handleIn = seg.handleIn.add(event.delta);
     else if (activeNodeHit.type === 'handle-out') seg.handleOut = seg.handleOut.add(event.delta);
+    nodeDragChanged = true;
     revalidateBridge();
     return;
   }
@@ -1054,7 +1165,7 @@ tool.onMouseDrag = (event) => {
   drawingSegment.handleIn = handle.multiply(-1);
 };
 
-tool.onMouseUp = () => { drawingSegment = null; isPanning = false; activeNodeHit = null; };
+tool.onMouseUp = () => { drawingSegment = null; isPanning = false; activeNodeHit = null; nodeDragChanged = false; };
 
 tool.onMouseMove = (event) => {
   if (isMobile) return;   // en celular el readout se reserva para los avisos
@@ -1155,6 +1266,12 @@ function enterReviewOuter(message) {
   btnSmooth.disabled = false;
   btnHole.disabled = false;
   btnNodeEdit.disabled = false;
+  if (!isMobile) {
+    desktopScaleFactor = 1;
+    desktopScaleSlider.value = 100;
+    $('desktopScaleVal').textContent = '100%';
+    desktopScalePanel.style.display = 'block';
+  }
   revalidateBridge();
   if (message) flash(message);
 }
@@ -1200,6 +1317,35 @@ function fitsInSquare() {
       && b.bottom <= SQUARE_MM + AREA_TOLERANCE_MM;
 }
 
+/* Una curva que se cruza a sí misma no puede extruirse: se detecta
+   comprobando cada segmento contra los no adyacentes. */
+function hasSelfIntersection(path) {
+  if (!path || !path.closed || path.segments.length < 4) return false;
+  const segs = path.segments;
+  const n = segs.length;
+  for (let i = 0; i < n; i++) {
+    const a1 = segs[i].point;
+    const a2 = segs[(i + 1) % n].point;
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue;
+      const b1 = segs[j].point;
+      const b2 = segs[(j + 1) % n].point;
+      if (segmentsCross(a1, a2, b1, b2)) return true;
+    }
+  }
+  return false;
+}
+
+function segmentsCross(a1, a2, b1, b2) {
+  const d1x = a2.x - a1.x, d1y = a2.y - a1.y;
+  const d2x = b2.x - b1.x, d2y = b2.y - b1.y;
+  const cross = d1x * d2y - d1y * d2x;
+  if (Math.abs(cross) < 1e-10) return false;
+  const t = ((b1.x - a1.x) * d2y - (b1.y - a1.y) * d2x) / cross;
+  const u = ((b1.x - a1.x) * d1y - (b1.y - a1.y) * d1x) / cross;
+  return t > 0.001 && t < 0.999 && u > 0.001 && u < 0.999;
+}
+
 /* Puente mínimo y desborde del área bloquean el paso al 3D, no solo avisan —
    tanto en el botón de escritorio como en el de celular. El trazo se pinta
    en rojo mientras se sale, para que el motivo del bloqueo sea visible. */
@@ -1211,8 +1357,13 @@ function revalidateBridge() {
   }
 
   insideOk = fitsInSquare();
+  noSelfIntersection = !(outerPath && outerPath.closed && hasSelfIntersection(outerPath))
+                     && !(holePath && holePath.closed && hasSelfIntersection(holePath));
 
-  if (!insideOk) {
+  if (!noSelfIntersection) {
+    warning.textContent = 'La curva se cruza a sí misma — corrige la intersección para continuar.';
+    warning.style.display = 'block';
+  } else if (!insideOk) {
     warning.textContent = 'La figura se sale del área de 10 × 10 mm — reduce el tamaño para continuar.';
     warning.style.display = 'block';
   } else if (!bridgeOk) {
@@ -1222,16 +1373,18 @@ function revalidateBridge() {
     warning.style.display = 'none';
   }
 
-  const stroke = insideOk ? '#ececef' : '#d16565';
+  const valid = insideOk && noSelfIntersection;
+  const stroke = valid ? '#ececef' : '#d16565';
   if (outerPath) outerPath.strokeColor = stroke;
   if (holePath) holePath.strokeColor = stroke;
 
   const ready = !!outerPath && outerPath.closed && mode !== 'hole';
-  btnAccept.disabled = !(ready && bridgeOk && insideOk);
-  $('btnMobileAdvance').disabled = !(ready && bridgeOk && insideOk);
+  btnAccept.disabled = !(ready && bridgeOk && insideOk && noSelfIntersection);
+  $('btnMobileAdvance').disabled = !(ready && bridgeOk && insideOk && noSelfIntersection);
 }
 
 btnSmooth.addEventListener('click', () => {
+  if (outerPath && outerPath.closed) saveUndoState();
   if (outerPath) outerPath.smooth({ type: 'continuous' });
   if (holePath) holePath.smooth({ type: 'continuous' });
   revalidateBridge();
@@ -1275,6 +1428,10 @@ function resetAll() {
   btnNodeEdit.classList.remove('active');
   btnNodeEdit.textContent = 'Editar nodos';
   canvasEl.style.cursor = isMobile ? 'grab' : 'crosshair';
+  undoStack.length = 0;
+  redoStack.length = 0;
+  updateUndoRedoButtons();
+  $('desktopScalePanel').style.display = 'none';
   try { sessionStorage.removeItem(DESIGN_KEY); } catch (e) {}
   if (isMobile) mobileScalePanel.style.display = 'none';
   revalidateBridge();
@@ -1518,6 +1675,7 @@ function deserializePath(data) {
 function acceptDesign() {
   if (!outerPath || !outerPath.closed) { flash('Cierra el contorno antes de aceptar.'); return; }
   revalidateBridge();
+  if (!noSelfIntersection) { flash('La curva se cruza a sí misma — corrige la intersección antes de continuar.'); return; }
   if (!insideOk) { flash('La figura se sale del área de 10 × 10 mm — reduce su tamaño para continuar.'); return; }
   if (!bridgeOk) { flash('El puente mínimo es de 1mm — ajusta el agujero.'); return; }
 
@@ -1926,7 +2084,7 @@ if (isMobile) {
   const importP = document.querySelector('#importScreen p');
   if (importP) importP.textContent = 'Elige un motivo de la biblioteca. Desde el celular solo ajustas su tamaño — para subir tu propio archivo o dibujar a mano, entra desde un computador.';
 
-  [btnTrace, btnSmooth, btnHole, btnNodeEdit].forEach((b) => { b.style.display = 'none'; });
+  [btnTrace, btnSmooth, btnHole, btnNodeEdit, $('btnUndo'), $('btnRedo')].forEach((b) => { b.style.display = 'none'; });
   canvasEl.style.cursor = 'grab';
 }
 
@@ -1943,6 +2101,35 @@ mobileScaleSlider.addEventListener('input', (e) => {
   $('mobileScaleVal').textContent = percent + '%';
   // Si al crecer se sale del cuadro, revalidateBridge bloquea el paso al 3D.
   revalidateBridge();
+});
+
+/* ---------- DESHACER / REHACER — botones y atajos de teclado ---------- */
+$('btnUndo').addEventListener('click', doUndo);
+$('btnRedo').addEventListener('click', doRedo);
+window.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); doUndo(); }
+  if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); doRedo(); }
+});
+
+/* ---------- Panel de escala en escritorio ---------- */
+let desktopScaleFactor = 1;
+const desktopScalePanel = $('desktopScalePanel');
+const desktopScaleSlider = $('desktopScaleSlider');
+
+desktopScaleSlider.addEventListener('input', (e) => {
+  if (!outerPath) return;
+  const percent = Math.max(25, Number(e.target.value));
+  const relative = (percent / 100) / desktopScaleFactor;
+  const center = new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2);
+  outerPath.scale(relative, center);
+  if (holePath) holePath.scale(relative, center);
+  desktopScaleFactor = percent / 100;
+  $('desktopScaleVal').textContent = percent + '%';
+  revalidateBridge();
+});
+
+$('btnDesktopScaleClose').addEventListener('click', () => {
+  desktopScalePanel.style.display = 'none';
 });
 
 /* Retroceder: vuelve directo a la biblioteca (en móvil es la única fuente de
