@@ -481,6 +481,7 @@
       <button id="btnSmooth" disabled>Suavizar trazo</button>
       <button id="btnHole" disabled>Agregar agujero interno</button>
       <button id="btnNodeEdit" disabled>Editar nodos</button>
+      <button id="btnMove" disabled>Mover diseño</button>
       <button id="btnReset" class="danger">Reiniciar</button>
       <button id="btnAccept" class="primary" disabled>Aceptar diseño</button>
     </div>
@@ -568,7 +569,7 @@ const MAX_ZOOM = 400;
    ruido de coma flotante del escalado. */
 const AREA_TOLERANCE_MM = 0.02;
 
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbykn2ed3u8L7cb8I1gq9PvNRbQWXdk7IFvb5ohE6egPjP2W4JmTJU31chfFT7UOoj3S/exec';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxQOfNhcBw8g1Hv7Sdh_JjNQgrLymY5zo4hSpFUiN09K36-UUh1_q1r3MaPWhWfhgPo/exec';
 const DESIGN_KEY = 'topitos-design';
 const TRACE_KEY = 'topitos-trace';
 const TERMS_KEY = 'topitos-terms-accepted';
@@ -952,6 +953,9 @@ let drawingSegment = null;
 let dragOrigin = null;
 let isPanning = false;
 let nodeEditMode = false;
+let moveMode = false;
+let moveDragActive = false;
+let moveStart = null;
 let activeNodeHit = null;
 let bridgeOk = true;
 let insideOk = true;
@@ -1027,6 +1031,12 @@ function updateUIAfterStateChange() {
     nodeEditMode = false;
     btnNodeEdit.classList.remove('active');
     btnNodeEdit.textContent = 'Editar nodos';
+    moveMode = false;
+    moveDragActive = false;
+    btnMove.disabled = true;
+    btnMove.classList.remove('active');
+    btnMove.textContent = 'Mover diseño';
+    canvasEl.style.cursor = isMobile ? 'grab' : 'crosshair';
   }
   if (outerPath) outerPath.fullySelected = nodeEditMode;
   if (holePath) holePath.fullySelected = nodeEditMode;
@@ -1046,6 +1056,7 @@ const btnHole = $('btnHole');
 const btnNodeEdit = $('btnNodeEdit');
 const btnAccept = $('btnAccept');
 const btnReset = $('btnReset');
+const btnMove = $('btnMove');
 const bgImage = $('bgImage');
 const tracePanel = $('tracePanel');
 
@@ -1102,6 +1113,14 @@ tool.onMouseDown = (event) => {
 
   if (traceIsEditable()) { dragOrigin = event.point; return; }
 
+  if (moveMode) {
+    if (!outerPath || !outerPath.closed) return;
+    saveUndoState();
+    moveDragActive = true;
+    moveStart = event.point;
+    return;
+  }
+
   if (nodeEditMode) {
     const hitOptions = { segments: true, handles: true, tolerance: 10 / paper.view.zoom };
     let hit = outerPath && outerPath.hitTest(event.point, hitOptions);
@@ -1141,6 +1160,14 @@ tool.onMouseDrag = (event) => {
   if (isPanning) { paper.view.center = paper.view.center.subtract(event.delta); return; }
   if (isMobile) return;
 
+  if (moveDragActive) {
+    if (outerPath) outerPath.translate(event.delta);
+    if (holePath) holePath.translate(event.delta);
+    canvasEl.style.cursor = 'grabbing';
+    revalidateBridge();
+    return;
+  }
+
   if (traceIsEditable()) {
     traceState.x += event.delta.x;
     traceState.y += event.delta.y;
@@ -1165,7 +1192,10 @@ tool.onMouseDrag = (event) => {
   drawingSegment.handleIn = handle.multiply(-1);
 };
 
-tool.onMouseUp = () => { drawingSegment = null; isPanning = false; activeNodeHit = null; nodeDragChanged = false; };
+tool.onMouseUp = () => {
+  if (moveDragActive) canvasEl.style.cursor = moveMode ? 'grab' : 'crosshair';
+  drawingSegment = null; isPanning = false; activeNodeHit = null; nodeDragChanged = false; moveDragActive = false;
+};
 
 tool.onMouseMove = (event) => {
   if (isMobile) return;   // en celular el readout se reserva para los avisos
@@ -1267,6 +1297,7 @@ function enterReviewOuter(message) {
   btnHole.disabled = false;
   btnNodeEdit.disabled = false;
   if (!isMobile) {
+    btnMove.disabled = false;
     desktopScaleFactor = 1;
     desktopScaleSlider.value = 100;
     $('desktopScaleVal').textContent = '100%';
@@ -1392,11 +1423,20 @@ btnSmooth.addEventListener('click', () => {
 
 btnNodeEdit.addEventListener('click', () => {
   nodeEditMode = !nodeEditMode;
+  if (nodeEditMode) { moveMode = false; btnMove.classList.remove('active'); btnMove.textContent = 'Mover diseño'; canvasEl.style.cursor = 'crosshair'; }
   btnNodeEdit.classList.toggle('active', nodeEditMode);
   btnNodeEdit.textContent = nodeEditMode ? 'Editar nodos (activo)' : 'Editar nodos';
   canvasEl.style.cursor = nodeEditMode ? 'default' : 'crosshair';
   if (outerPath) outerPath.fullySelected = nodeEditMode;
   if (holePath) holePath.fullySelected = nodeEditMode;
+});
+
+btnMove.addEventListener('click', () => {
+  moveMode = !moveMode;
+  if (moveMode) { nodeEditMode = false; btnNodeEdit.classList.remove('active'); btnNodeEdit.textContent = 'Editar nodos'; if (outerPath) outerPath.fullySelected = false; if (holePath) holePath.fullySelected = false; }
+  btnMove.classList.toggle('active', moveMode);
+  btnMove.textContent = moveMode ? 'Mover diseño (activo)' : 'Mover diseño';
+  canvasEl.style.cursor = moveMode ? 'grab' : 'crosshair';
 });
 
 btnHole.addEventListener('click', () => {
@@ -1427,6 +1467,11 @@ function resetAll() {
   btnNodeEdit.disabled = true;
   btnNodeEdit.classList.remove('active');
   btnNodeEdit.textContent = 'Editar nodos';
+  moveMode = false;
+  moveDragActive = false;
+  btnMove.disabled = true;
+  btnMove.classList.remove('active');
+  btnMove.textContent = 'Mover diseño';
   canvasEl.style.cursor = isMobile ? 'grab' : 'crosshair';
   undoStack.length = 0;
   redoStack.length = 0;
@@ -2084,7 +2129,7 @@ if (isMobile) {
   const importP = document.querySelector('#importScreen p');
   if (importP) importP.textContent = 'Elige un motivo de la biblioteca. Desde el celular solo ajustas su tamaño — para subir tu propio archivo o dibujar a mano, entra desde un computador.';
 
-  [btnTrace, btnSmooth, btnHole, btnNodeEdit, $('btnUndo'), $('btnRedo')].forEach((b) => { b.style.display = 'none'; });
+  [btnTrace, btnSmooth, btnHole, btnNodeEdit, $('btnUndo'), $('btnRedo'), btnMove].forEach((b) => { b.style.display = 'none'; });
   canvasEl.style.cursor = 'grab';
 }
 
