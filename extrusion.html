@@ -94,8 +94,6 @@
     border-radius: 12px;
     padding: 14px;
     backdrop-filter: blur(6px);
-    max-height: calc(100vh - 130px);
-    overflow-y: auto;
   }
   #rightPanel h2 {
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
@@ -202,8 +200,9 @@
   #orderModal .card {
     background: var(--panel); border: 1px solid var(--line);
     border-radius: 14px; padding: 26px 28px; width: 360px; max-width: 100%;
-    max-height: 88vh; overflow-y: auto;
+    max-height: calc(100vh - 48px); display: flex; flex-direction: column;
   }
+  #orderModal form { overflow-y: auto; min-height: 0; }
   #orderModal h2 { font-size: 16px; margin: 0 0 4px; }
   #orderModal .subtitle { font-size: 12px; color: var(--text-dim); margin: 0 0 18px; }
   #orderModal label {
@@ -226,7 +225,7 @@
   #orderModal .form-grid { display: block; }
   #orderModal .form-col > *:first-child { margin-top: 0; }
 
-  html:not(.is-mobile) #orderModal .card { width: 800px; padding: 30px 34px; }
+  html:not(.is-mobile) #orderModal .card { width: 800px; padding: 30px 34px; max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
   html:not(.is-mobile) #orderModal .form-grid {
     display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 0 30px; align-items: start;
   }
@@ -234,7 +233,7 @@
   html:not(.is-mobile) #orderModal #qrBlock { margin-top: 0; }
   html:not(.is-mobile) #orderModal .row { margin-top: 22px; }
   @media (max-width: 820px) {
-    html:not(.is-mobile) #orderModal .card { width: 380px; padding: 26px 28px; }
+    html:not(.is-mobile) #orderModal .card { width: 380px; padding: 26px 28px; max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
     html:not(.is-mobile) #orderModal .form-grid { display: block; }
     html:not(.is-mobile) #orderModal #qrBlock { margin-top: 18px; }
   }
@@ -313,7 +312,7 @@
     #topbar h1 { font-size: 13px; }
     #hint { display: none; }
     #panelWrap { top: 50px; right: 12px; max-width: calc(100% - 24px); }
-    #rightPanel { width: min(240px, calc(100vw - 62px)); max-height: calc(100vh - 150px); }
+    #rightPanel { width: min(240px, calc(100vw - 62px)); }
     #stepper { gap: 14px; padding: 12px 0; }
     .step-label { font-size: 10px; }
   }
@@ -1636,6 +1635,7 @@ orderForm.addEventListener('submit', async (event) => {
     const rate = PRICE_PER_MM[currentFinishKey];
     const unit = unitPrice();
     const stemOpt = stemOptions[currentStemIndex] || { name: 'Clásico', url: null };
+    const thumbs = captureThumbnails();
     const payload = {
       type: 'order',
       firstName: document.getElementById('ofName').value.trim(),
@@ -1661,6 +1661,10 @@ orderForm.addEventListener('submit', async (event) => {
       receiptBase64,
       receiptFileName: file.name,
       receiptMimeType: file.type || 'image/jpeg',
+      thumbTop: thumbs.thumbTop || '',
+      thumbLeft: thumbs.thumbLeft || '',
+      thumbRight: thumbs.thumbRight || '',
+      thumbPerspective: thumbs.thumbPerspective || '',
     };
 
     /* Sin cabecera Content-Type a propósito: así el navegador la envía como
@@ -1689,7 +1693,46 @@ orderForm.addEventListener('submit', async (event) => {
 });
 
 /* ============================================================
-   9. LOOP
+   9. MINIATURAS — 4 vistas ligeras del diseño para la hoja Pedidos.
+   ============================================================ */
+function captureThumbnails() {
+  const thumbSize = 120;
+  const tmpCanvas = document.createElement('canvas');
+  tmpCanvas.width = thumbSize;
+  tmpCanvas.height = thumbSize;
+  const tmpRenderer = new THREE.WebGLRenderer({ canvas: tmpCanvas, antialias: true, alpha: true });
+  tmpRenderer.setPixelRatio(1);
+  tmpRenderer.setSize(thumbSize, thumbSize);
+  tmpRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+  tmpRenderer.setClearColor(0x0a0a0a, 1);
+
+  const thumbCam = new THREE.PerspectiveCamera(40, 1, 0.1, 400);
+  const span = Math.max(spacing * 2 + pieceSize.x, STEM_LENGTH_MM);
+  const dist = span * 1.8;
+  const views = [
+    { name: 'superior', pos: [0, dist * 0.9, 0.01], target: [0, 0, 0] },
+    { name: 'izquierda', pos: [-dist * 0.9, 0, 0], target: [0, 0, 0] },
+    { name: 'derecha', pos: [dist * 0.9, 0, 0], target: [0, 0, 0] },
+    { name: 'perspectiva', pos: [dist * 0.45, dist * 0.35, dist * 0.6], target: [0, 0, 0] },
+  ];
+  const thumbKeys = ['thumbTop', 'thumbLeft', 'thumbRight', 'thumbPerspective'];
+  const thumbs = {};
+
+  views.forEach((v, i) => {
+    thumbCam.position.set(v.pos[0], v.pos[1], v.pos[2]);
+    thumbCam.lookAt(v.target[0], v.target[1], v.target[2]);
+    thumbCam.updateProjectionMatrix();
+    tmpRenderer.render(scene, thumbCam);
+    thumbs[thumbKeys[i]] = tmpCanvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+  });
+
+  tmpRenderer.dispose();
+  thumbCam.clear();
+  return thumbs;
+}
+
+/* ============================================================
+   10. LOOP
    ============================================================ */
 function animate() {
   requestAnimationFrame(animate);
