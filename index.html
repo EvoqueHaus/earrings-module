@@ -88,15 +88,39 @@
     pointer-events: none;
   }
 
-  #actionbar {
-    position: absolute; bottom: 56px; left: 50%; transform: translateX(-50%); z-index: 3;
-    display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
-    max-width: calc(100% - 24px);
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 8px;
+  #drawPanelWrap {
+    position: absolute; top: 56px; right: 16px; z-index: 4;
+    display: flex; align-items: flex-start; gap: 8px;
+    transition: transform .25s ease;
   }
+  #drawPanelWrap.collapsed { transform: translateX(calc(100% - 38px)); }
+  @media (prefers-reduced-motion: reduce) { #drawPanelWrap { transition: none; } }
+
+  #drawPanelToggle {
+    width: 30px; height: 30px; flex: none; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(35,35,38,0.9); border: 1px solid var(--line);
+    border-radius: 8px; color: var(--text); font-size: 15px; line-height: 1; cursor: pointer;
+    backdrop-filter: blur(6px);
+  }
+  #drawPanelToggle:hover { background: rgba(255,255,255,0.1); }
+
+  #drawPanel {
+    width: 180px;
+    background: rgba(35,35,38,0.85);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
+    backdrop-filter: blur(6px);
+  }
+  #drawPanel h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-dim); margin: 0 0 8px;
+  }
+  #drawPanel .block + .block { margin-top: 14px; }
+  #drawPanel button { width: 100%; margin-bottom: 4px; }
+  #drawPanel button:last-child { margin-bottom: 0; }
+  #drawPanel input[type=range] { width: 100%; accent-color: var(--accent); }
   button {
     font-family: inherit; font-size: 13px; font-weight: 500;
     background: transparent; color: var(--text);
@@ -112,6 +136,8 @@
   button.primary:disabled { background: rgba(255,255,255,0.22); color: rgba(255,255,255,0.55); opacity: 1; }
   button.danger { color: var(--danger); }
   button.active { border-color: var(--accent); color: var(--accent); }
+
+  #btnUndo, #btnRedo { font-size: 20px; padding: 6px 10px; min-width: 38px; }
 
   #bgImage {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -269,21 +295,6 @@
   }
   #catalogSearch:focus { outline: 1px solid var(--accent); }
 
-  /* ---------- PANEL DE ESCRITORIO ---------- */
-  #desktopScalePanel {
-    position: absolute; bottom: 110px; left: 50%; transform: translateX(-50%); z-index: 3;
-    width: 300px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 12px 16px;
-    display: none;
-  }
-  #desktopScalePanel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 8px; }
-  #desktopScalePanel input[type=range] { width: 100%; accent-color: var(--accent); }
-  #desktopScalePanel .ref-row { display: flex; gap: 6px; margin-top: 10px; }
-  #desktopScalePanel .ref-row button { flex: 1; font-size: 12px; padding: 8px 6px; }
-
   /* ---------- PANEL DE ESCALA (solo móvil) ---------- */
   #mobileScalePanel {
     position: absolute; top: 56px; right: 16px; z-index: 5;
@@ -331,33 +342,29 @@
     #stepper { gap: 14px; padding: 12px 0; }
     .step-label { font-size: 10px; }
     #tracePanel { top: auto; bottom: 150px; right: 12px; left: 12px; width: auto; }
-    #desktopScalePanel { bottom: 160px; width: auto; left: 12px; right: 12px; transform: none; }
 
-    /* El actionbar se vuelve un panel lateral colapsable "hacia un costado". */
-    #actionbarWrap {
-      position: absolute; bottom: 56px; right: 0; left: auto; transform: none; z-index: 3;
+    /* El panel de dibujar se vuelve un panel lateral colapsable "hacia un costado". */
+    #drawPanelWrap {
+      position: absolute; bottom: 56px; right: 0; left: auto; top: auto; transform: none; z-index: 3;
       display: flex; align-items: center; gap: 6px;
       transition: transform .25s ease;
     }
     /* Se deja siempre la pestaña visible: colapsar no puede dejar los
        controles fuera de pantalla sin forma de recuperarlos. */
-    #actionbarWrap.collapsed { transform: translateX(calc(100% - 30px)); }
-    #actionbarToggle {
+    #drawPanelWrap.collapsed { transform: translateX(calc(100% - 30px)); }
+    #drawPanelToggle {
       width: 30px; height: 40px; flex: none; padding: 0;
       display: flex; align-items: center; justify-content: center;
       background: var(--panel); border: 1px solid var(--line);
       border-radius: 8px 0 0 8px; color: var(--text); font-size: 15px; cursor: pointer;
     }
-    #actionbar {
-      position: static; transform: none; bottom: auto; left: auto;
-      flex-direction: column; flex-wrap: nowrap;
+    #drawPanel {
+      width: auto; min-width: 160px;
       border-radius: 0 10px 10px 0; padding: 8px;
-      max-width: 44vw;
     }
-    #actionbar button { font-size: 12px; padding: 8px 10px; white-space: nowrap; }
   }
   @media (min-width: 721px) {
-    #actionbarToggle { display: none; }
+    #drawPanelToggle { display: none; }
   }
 
   /* ---------- LAYOUT DE CELULAR ----------
@@ -381,10 +388,9 @@
   }
 
   /* Dibujar y calcar son de escritorio: sus barras no existen en el celular. */
-  .is-mobile #actionbarWrap { display: none !important; }
+  .is-mobile #drawPanelWrap { display: none !important; }
   .is-mobile #tracePanel { display: none !important; }
   .is-mobile #areaNotice { display: none; }
-  .is-mobile #desktopScalePanel { display: none !important; }
 
   /* Los avisos van debajo de la barra de pasos, nunca encima de ella. */
   .is-mobile #readout { top: calc(138px + env(safe-area-inset-top)); left: 14px; font-size: 11px; max-width: calc(100% - 28px); }
@@ -465,34 +471,35 @@
   <div id="mobileScalePanel">
     <h2>Tamaño del motivo</h2>
     <div class="slider-label"><span>Escala</span><span id="mobileScaleVal">100%</span></div>
-    <input id="mobileScaleSlider" type="range" min="35" max="250" value="100">
+    <input id="mobileScaleSlider" type="range" min="50" max="250" value="100">
     <div class="ref-row">
       <button id="btnMobileBack" class="danger">‹ Otro motivo</button>
       <button id="btnMobileAdvance" class="primary">Ver en 3D ›</button>
     </div>
   </div>
 
-  <div id="actionbarWrap">
-    <button id="actionbarToggle" type="button" aria-label="Mostrar u ocultar controles">‹</button>
-    <div id="actionbar">
-      <button id="btnUndo" disabled title="Deshacer (Ctrl+Z)" aria-label="Deshacer">↶</button>
-      <button id="btnRedo" disabled title="Rehacer (Ctrl+Y)" aria-label="Rehacer">↷</button>
-      <button id="btnTrace">Calcar imagen</button>
-      <button id="btnSmooth" disabled>Suavizar trazo</button>
-      <button id="btnHole" disabled>Agregar agujero interno</button>
-      <button id="btnNodeEdit" disabled>Editar nodos</button>
-      <button id="btnMove" disabled>Mover diseño</button>
-      <button id="btnReset" class="danger">Reiniciar</button>
-      <button id="btnAccept" class="primary" disabled>Aceptar diseño</button>
-    </div>
-  </div>
-
-  <div id="desktopScalePanel">
-    <h2>Escala del diseño</h2>
-    <div class="slider-label"><span>Escala</span><span id="desktopScaleVal">100%</span></div>
-    <input id="desktopScaleSlider" type="range" min="25" max="250" value="100">
-    <div class="ref-row">
-      <button id="btnDesktopScaleClose" class="primary">Cerrar</button>
+  <div id="drawPanelWrap">
+    <button id="drawPanelToggle" type="button" aria-label="Mostrar u ocultar controles">‹</button>
+    <div id="drawPanel">
+      <div class="block">
+        <h2>Escala</h2>
+        <div class="slider-label"><span>Escala</span><span id="desktopScaleVal">100%</span></div>
+        <input id="desktopScaleSlider" type="range" min="50" max="250" value="100">
+      </div>
+      <div class="block">
+        <h2>Controles</h2>
+        <button id="btnUndo" disabled title="Deshacer (Ctrl+Z)" aria-label="Deshacer">↶</button>
+        <button id="btnRedo" disabled title="Rehacer (Ctrl+Y)" aria-label="Rehacer">↷</button>
+        <button id="btnTrace">Calcar imagen</button>
+        <button id="btnSmooth" disabled>Suavizar trazo</button>
+        <button id="btnHole" disabled>Agregar agujero interno</button>
+        <button id="btnNodeEdit" disabled>Editar nodos</button>
+        <button id="btnMove" disabled>Mover diseño</button>
+      </div>
+      <div class="block">
+        <button id="btnReset" class="danger" style="width:100%">Reiniciar</button>
+        <button id="btnAccept" class="primary" disabled style="width:100%;margin-top:6px">Aceptar diseño</button>
+      </div>
     </div>
   </div>
 
@@ -505,12 +512,11 @@
   <div id="importScreen">
     <div class="card">
       <h2>¿Cómo quieres empezar?</h2>
-      <p>Sube un archivo de tu diseño, elige un motivo de la biblioteca, o dibuja tu figura a mano en el siguiente paso.</p>
       <input type="file" id="fileInput" accept=".svg,.dxf,.pdf" hidden>
       <div class="row">
         <button id="btnUpload" class="primary">Subir archivo</button>
-        <button id="btnCatalog">Elegir un motivo</button>
-        <button id="btnSkipImport">Dibujar a mano</button>
+        <button id="btnCatalog" class="primary">Elegir un motivo</button>
+        <button id="btnSkipImport" class="primary">Dibujar a mano</button>
       </div>
       <div id="importStatus"></div>
     </div>
@@ -569,7 +575,7 @@ const MAX_ZOOM = 400;
    ruido de coma flotante del escalado. */
 const AREA_TOLERANCE_MM = 0.02;
 
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxQOfNhcBw8g1Hv7Sdh_JjNQgrLymY5zo4hSpFUiN09K36-UUh1_q1r3MaPWhWfhgPo/exec';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbykn2ed3u8L7cb8I1gq9PvNRbQWXdk7IFvb5ohE6egPjP2W4JmTJU31chfFT7UOoj3S/exec';
 const DESIGN_KEY = 'topitos-design';
 const TRACE_KEY = 'topitos-trace';
 const TERMS_KEY = 'topitos-terms-accepted';
@@ -581,7 +587,7 @@ const $ = id => document.getElementById(id);
 const isMobile = document.documentElement.classList.contains('is-mobile');
 const mobileScalePanel = $('mobileScalePanel');
 const mobileScaleSlider = $('mobileScaleSlider');
-const MIN_MOBILE_SCALE = 35;   // por debajo de esto la pieza deja de ser fabricable
+const MIN_MOBILE_SCALE = 50;   // por debajo de esto la pieza queda menor a 5 mm
 let mobileScaleFactor = 1;
 
 // Banderas de arranque: los globos de ayuda esperan a que no haya nada encima.
@@ -815,7 +821,7 @@ function tipsForStage() {
     queueTips([{
       id: 'dibujo',
       text: 'Cierra la figura volviendo al primer punto. Después puedes suavizar el trazo, editar nodos o agregar un agujero, y aceptar el diseño.',
-      target: () => $('actionbar'),
+      target: () => $('drawPanel'),
     }]);
   }
 }
@@ -1027,16 +1033,20 @@ function updateUIAfterStateChange() {
   btnHole.disabled = !hasClosed;
   btnHole.textContent = holePath ? 'Quitar agujero interno' : 'Agregar agujero interno';
   btnNodeEdit.disabled = !hasClosed;
+  if (!isMobile) {
+    btnMove.disabled = !hasClosed;
+    if (!hasClosed) {
+      moveMode = false;
+      moveDragActive = false;
+      btnMove.classList.remove('active');
+      btnMove.textContent = 'Mover diseño';
+      canvasEl.style.cursor = 'crosshair';
+    }
+  }
   if (!hasClosed) {
     nodeEditMode = false;
     btnNodeEdit.classList.remove('active');
     btnNodeEdit.textContent = 'Editar nodos';
-    moveMode = false;
-    moveDragActive = false;
-    btnMove.disabled = true;
-    btnMove.classList.remove('active');
-    btnMove.textContent = 'Mover diseño';
-    canvasEl.style.cursor = isMobile ? 'grab' : 'crosshair';
   }
   if (outerPath) outerPath.fullySelected = nodeEditMode;
   if (holePath) holePath.fullySelected = nodeEditMode;
@@ -1301,7 +1311,6 @@ function enterReviewOuter(message) {
     desktopScaleFactor = 1;
     desktopScaleSlider.value = 100;
     $('desktopScaleVal').textContent = '100%';
-    desktopScalePanel.style.display = 'block';
   }
   revalidateBridge();
   if (message) flash(message);
@@ -1476,7 +1485,6 @@ function resetAll() {
   undoStack.length = 0;
   redoStack.length = 0;
   updateUndoRedoButtons();
-  $('desktopScalePanel').style.display = 'none';
   try { sessionStorage.removeItem(DESIGN_KEY); } catch (e) {}
   if (isMobile) mobileScalePanel.style.display = 'none';
   revalidateBridge();
@@ -2156,14 +2164,15 @@ window.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); doRedo(); }
 });
 
-/* ---------- Panel de escala en escritorio ---------- */
+/* ---------- Escala en escritorio ---------- */
 let desktopScaleFactor = 1;
-const desktopScalePanel = $('desktopScalePanel');
 const desktopScaleSlider = $('desktopScaleSlider');
 
 desktopScaleSlider.addEventListener('input', (e) => {
   if (!outerPath) return;
-  const percent = Math.max(25, Number(e.target.value));
+  // Tope inferior duro: por debajo del 50% la pieza queda menor a 5 mm y no es fabricable.
+  const percent = Math.max(50, Number(e.target.value));
+  if (String(percent) !== e.target.value) e.target.value = String(percent);
   const relative = (percent / 100) / desktopScaleFactor;
   const center = new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2);
   outerPath.scale(relative, center);
@@ -2171,10 +2180,6 @@ desktopScaleSlider.addEventListener('input', (e) => {
   desktopScaleFactor = percent / 100;
   $('desktopScaleVal').textContent = percent + '%';
   revalidateBridge();
-});
-
-$('btnDesktopScaleClose').addEventListener('click', () => {
-  desktopScalePanel.style.display = 'none';
 });
 
 /* Retroceder: vuelve directo a la biblioteca (en móvil es la única fuente de
@@ -2191,13 +2196,18 @@ $('btnMobileAdvance').addEventListener('click', () => {
   acceptDesign();
 });
 
-/* ---------- Panel de controles colapsable "hacia un costado" (escritorio angosto) ---------- */
-const actionbarWrap = $('actionbarWrap');
-const actionbarToggle = $('actionbarToggle');
-actionbarToggle.addEventListener('click', () => {
-  const collapsed = actionbarWrap.classList.toggle('collapsed');
-  actionbarToggle.textContent = collapsed ? '›' : '‹';
+/* ---------- Panel de controles colapsable "hacia un costado" (escritorio) ---------- */
+const drawPanelWrap = $('drawPanelWrap');
+const drawPanelToggle = $('drawPanelToggle');
+drawPanelToggle.addEventListener('click', () => {
+  const collapsed = drawPanelWrap.classList.toggle('collapsed');
+  drawPanelToggle.textContent = collapsed ? '›' : '‹';
 });
+// En ventanas angostas de escritorio el panel arranca plegado para no tapar el lienzo.
+if (!isMobile && window.matchMedia('(max-width: 720px)').matches) {
+  drawPanelWrap.classList.add('collapsed');
+  drawPanelToggle.textContent = '›';
+}
 
 /* ---------- Stepper de escritorio — volver a un paso anterior ---------- */
 stepImport.addEventListener('click', () => {
