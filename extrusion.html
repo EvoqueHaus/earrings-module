@@ -740,6 +740,7 @@ document.getElementById('btnHelp').addEventListener('click', () => {
 const PIECE_DEPTH_MM = 0.8;
 const STEM_LENGTH_MM = 10;
 const UNITS_PER_PAIR = 2; // un pedido son siempre dos aretes
+const STEM_SURCHARGE_MM = { 'Topito Roscado': 10000 };
 
 let design = null;
 try {
@@ -1268,6 +1269,7 @@ async function selectStem(index, silent) {
     setStemStatus('');
     renderStemOptions(false);
     saveViewState();
+    updatePrice();
     return;
   }
 
@@ -1280,6 +1282,7 @@ async function selectStem(index, silent) {
     setStemContent(template);
     setStemStatus('');
     saveViewState();
+    updatePrice();
   } catch (err) {
     console.error('No se pudo cargar el vástago "' + opt.name + '":', err);
     setStemStatus('No se pudo cargar “' + opt.name + '”: ' + (err && err.message ? err.message : err), true);
@@ -1478,9 +1481,20 @@ loadConfig();
    7. COTIZACIÓN — el pedido son dos aretes, así que el valor
    mostrado y el enviado ya vienen multiplicados por el par.
    ============================================================ */
+function stemSurcharge() {
+  const opt = stemOptions[currentStemIndex];
+  if (!opt) return 0;
+  const name = (opt.name || '').trim().toLowerCase();
+  for (const [key, val] of Object.entries(STEM_SURCHARGE_MM)) {
+    if (name === key.toLowerCase()) return val;
+  }
+  return 0;
+}
+
 function unitPrice() {
   const rate = PRICE_PER_MM[currentFinishKey];
-  return rate == null ? null : Math.round(design.totalLengthMm * rate);
+  if (rate == null) return null;
+  return Math.round(design.totalLengthMm * rate) + stemSurcharge();
 }
 
 function updatePrice() {
@@ -1493,8 +1507,13 @@ function updatePrice() {
     return;
   }
   const unit = unitPrice();
+  const base = Math.round(design.totalLengthMm * rate);
+  const surcharge = stemSurcharge();
   priceEl.textContent = '$' + (unit * UNITS_PER_PAIR).toLocaleString('es-CO');
-  metaEl.textContent = `Par de 2 aretes · ${design.totalLengthMm}mm × $${rate} = $${unit.toLocaleString('es-CO')} c/u`;
+  let meta = `Par de 2 aretes · ${design.totalLengthMm}mm × $${rate} = $${base.toLocaleString('es-CO')}`;
+  if (surcharge > 0) meta += ` + $${surcharge.toLocaleString('es-CO')} (vástago roscado)`;
+  meta += ` = $${unit.toLocaleString('es-CO')} c/u`;
+  metaEl.textContent = meta;
 }
 
 document.querySelectorAll('.finish-btn').forEach((btn) => {
