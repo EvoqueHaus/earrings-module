@@ -378,7 +378,7 @@
       <button id="btnHelp" type="button" title="Ver las ayudas otra vez" aria-label="Ver las ayudas otra vez">?</button>
     </div>
   </div>
-  <div id="hint">arrastrar: orbitar · rueda: zoom · W/E: mover/rotar el vástago</div>
+  <div id="hint">arrastrar: orbitar · rueda: zoom · W/E: mover/rotar vástago</div>
 
   <div id="mobileSteps" role="group" aria-label="Pasos">
     <button type="button" class="mstep" id="mstepImport">1 · Importar</button>
@@ -414,10 +414,9 @@
         <h2>Vástago <span class="sublabel">tipo de poste</span></h2>
         <div id="stemOptions" role="group" aria-label="Tipo de vástago"></div>
         <div id="stemStatus" role="status"></div>
-        <button id="btnStemToggle" class="panel-btn" type="button">
-          Control de Movimiento
-          <span class="sublabel">Gumball</span>
-        </button>
+    <button id="btnStemToggle" class="panel-btn" type="button">
+        Mover Vástago
+    </button>
       </div>
 
       <div class="block" id="blockPrice">
@@ -537,7 +536,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
    ============================================================ */
 const DESIGN_KEY = 'topitos-design';
 const VIEW_KEY = 'topitos-3d';
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxQOfNhcBw8g1Hv7Sdh_JjNQgrLymY5zo4hSpFUiN09K36-UUh1_q1r3MaPWhWfhgPo/exec';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbykn2ed3u8L7cb8I1gq9PvNRbQWXdk7IFvb5ohE6egPjP2W4JmTJU31chfFT7UOoj3S/exec';
 
 const isMobile = document.documentElement.classList.contains('is-mobile');
 
