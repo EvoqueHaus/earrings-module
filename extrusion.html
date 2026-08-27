@@ -1,359 +1,1745 @@
-/**
- * Topitos — backend (Google Apps Script)
- *
- * Hojas que lee:
- *   background    A1 imagen · B1 escala (10–100) · C1 color de la app (escritorio)
- *                 A2 imagen · B2 escala (10–100) · C2 color de la app (móvil)
- *   PRELUDE       A2 logo   · B2 escala (1–100)  · C2 color de fondo del prelude
- *   PRICING       B1 plata brillante · B2 plata mate · B3 oro brillante · B4 oro mate
- *   QR            A1 imagen del código QR de pago
- *   SVG CATALOG   A2:A url del SVG · B2:B url de la previsualización · C2:C tags (separados por coma)
- *   Vastago       A2:A url del modelo .glb · B2:B nombre que ve el cliente
- *   Pedidos       (se escribe con cada pedido)
- *
- * Los .glb de "Vastago" tienen que estar alojados en un origen que mande
- * cabeceras CORS (Cloudinary, por ejemplo). Drive no las manda y el navegador
- * rechaza la descarga del modelo.
- *
- * Al publicar cambios: Implementar → Administrar implementaciones → editar la
- * implementación existente → "Nueva versión". Si creas una implementación nueva
- * cambia la URL y hay que actualizarla en index.html y extrusion.html.
- */
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<link rel="icon" type="image/jpeg" href="https://res.cloudinary.com/dtpxoihkf/image/upload/v1786830126/EVOQUE_HAUS_FAVICON_ijlska.jpg">
+<title>Topitos — Extrusión 3D</title>
+<script>
+  /* Mismo criterio que index.html: pantalla pequeña (en cualquier orientación)
+     + puntero grueso. Se marca antes de pintar para que el layout de celular
+     y el JS nunca queden desincronizados. */
+  (function () {
+    var coarse = window.matchMedia('(pointer: coarse)').matches;
+    var small = Math.min(window.innerWidth, window.innerHeight) <= 720;
+    if (coarse && small) document.documentElement.classList.add('is-mobile');
+  })();
+</script>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --panel: #161616;
+    --line: rgba(255,255,255,0.12);
+    --accent: #ffffff;
+    --text: #f5f5f5;
+    --text-dim: #8a8a8a;
+    --danger: #d16565;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #app { position: relative; width: 100%; height: 100%; overflow: hidden; }
+  canvas { position: absolute; top: 0; left: 0; z-index: 1; display: block; touch-action: none; }
+  #labelLayer { position: absolute; top: 0; left: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+  .dim-label {
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 11px; color: var(--text);
+    background: rgba(10,10,10,0.6);
+    border: 1px solid var(--line);
+    padding: 2px 6px; border-radius: 4px;
+    white-space: nowrap; pointer-events: none;
+  }
+  #bgImage {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 0; pointer-events: none; max-width: none;
+  }
 
-const SPREADSHEET_ID = '1x0PjmP142rjHQxuP0q1xmisWw8yj9ZUF7-ighc_LPkk';
-const ALERT_EMAIL = 'jonathangonzalez@evoquehaus.com';
+  #topbar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 2;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 20px;
+    background: linear-gradient(to bottom, rgba(28,28,30,0.9), transparent);
+  }
+  #topbar h1 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
+  #topbar a { color: var(--text-dim); font-size: 12px; text-decoration: none; white-space: nowrap; }
+  #topbar a:hover { color: var(--text); }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  #btnHelp {
+    width: 26px; height: 26px; flex: none; padding: 0; border-radius: 50%;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.04);
+    color: var(--text-dim); font-family: inherit; font-size: 12px; line-height: 1; cursor: pointer;
+  }
+  #btnHelp:hover { color: var(--text); border-color: var(--accent); background: rgba(255,255,255,0.08); }
+  #hint {
+    position: absolute; top: 46px; left: 20px; z-index: 2;
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; color: var(--text-dim);
+  }
 
-// Carpeta de Drive donde se guardan los comprobantes de pago.
-const RECEIPTS_FOLDER_ID = '1g4ZPEut7si9l3H-aeSvz4xEt1vniL-Mk';
+  /* ---------- PANEL ---------- */
+  #panelWrap {
+    position: absolute; top: 56px; right: 16px; z-index: 4;
+    display: flex; align-items: flex-start; gap: 8px;
+    transition: transform .25s ease;
+  }
+  #panelWrap.collapsed { transform: translateX(calc(100% - 38px)); }
+  @media (prefers-reduced-motion: reduce) { #panelWrap { transition: none; } }
 
-function doGet(e) {
-  const params = (e && e.parameter) || {};
+  #panelToggle {
+    width: 30px; height: 30px; flex: none; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(35,35,38,0.9); border: 1px solid var(--line);
+    border-radius: 8px; color: var(--text); font-size: 15px; line-height: 1; cursor: pointer;
+    backdrop-filter: blur(6px);
+  }
+  #panelToggle:hover { background: rgba(255,255,255,0.1); }
 
-  // Diagnóstico: <URL>/exec?scopes=1 devuelve los permisos reales con los que
-  // está corriendo la implementación. Distingue un fallo de autorización de
-  // uno de código sin tener que enviar un pedido de prueba.
-  if (params.scopes) return checkScopes();
+  #rightPanel {
+    width: 224px;
+    background: rgba(35,35,38,0.85);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
+    backdrop-filter: blur(6px);
+  }
+  #rightPanel h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-dim); margin: 0 0 8px;
+  }
+  #rightPanel h2 + h2, .block + .block { margin-top: 16px; }
+  .block { margin-bottom: 0; }
+  .sublabel { display: block; font-size: 9px; letter-spacing: 0.08em; color: var(--text-dim); text-transform: none; margin-top: 2px; }
 
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  .finishes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .finish-btn {
+    font-family: inherit; font-size: 11px; padding: 8px 6px; border-radius: 7px;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.03); color: var(--text);
+    cursor: pointer; text-align: center;
+  }
+  .finish-btn.active { border-color: var(--accent); color: var(--accent); }
 
-  const data = {
-    image: cell(ss, 'background', 'A1'),
-    scale: cell(ss, 'background', 'B1'),
-    color: cell(ss, 'background', 'C1'),
-    mobile: {
-      image: cell(ss, 'background', 'A2'),
-      scale: cell(ss, 'background', 'B2'),
-      color: cell(ss, 'background', 'C2'),
+  /* ---------- TIPOS DE VÁSTAGO ----------
+     Los nombres los escribe la tienda en la hoja "Vastago", así que pueden ser
+     largos: una columna por opción, texto a la izquierda y sin recortes. */
+  #stemOptions { display: grid; gap: 6px; }
+  .stem-btn {
+    width: 100%; font-family: inherit; font-size: 12px; padding: 9px 10px;
+    border-radius: 7px; border: 1px solid var(--line);
+    background: rgba(255,255,255,0.03); color: var(--text);
+    cursor: pointer; text-align: left; line-height: 1.3;
+  }
+  .stem-btn.active { border-color: var(--accent); color: var(--accent); }
+  .stem-btn:disabled { opacity: 0.5; cursor: wait; }
+  #stemStatus { font-size: 11px; color: var(--text-dim); line-height: 1.4; margin-top: 6px; }
+  #stemStatus.error { color: var(--danger); }
+  #stemOptions + .panel-btn { margin-top: 8px; }
+
+  .panel-btn {
+    width: 100%; font-family: inherit; font-size: 12px; padding: 9px; border-radius: 7px;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.03); color: var(--text);
+    cursor: pointer; text-align: center;
+  }
+  .panel-btn.active { border-color: var(--accent); color: var(--accent); }
+  .panel-btn .sublabel { display: block; }
+  .panel-btn + .panel-btn { margin-top: 6px; }
+
+  .slider-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+
+  #price { font-size: 20px; font-weight: 600; margin: 2px 0 2px; }
+  #priceMeta { font-size: 11px; color: var(--text-dim); margin-bottom: 12px; line-height: 1.45; }
+  button.confirm {
+    width: 100%; font-family: inherit; font-size: 13px; font-weight: 600; padding: 10px;
+    border-radius: 7px; border: none; background: var(--accent); color: #0a0a0a; cursor: pointer;
+  }
+  button.confirm:hover { background: #d8d8d8; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  #stepper {
+    position: absolute; bottom: 0; left: 0; right: 0; z-index: 2;
+    display: flex; align-items: center; justify-content: center; gap: 28px;
+    padding: 16px 0;
+    background: linear-gradient(to top, rgba(28,28,30,0.9), transparent);
+    pointer-events: none;
+  }
+  .step {
+    display: flex; align-items: center; gap: 8px; opacity: 0.4;
+    pointer-events: auto; cursor: pointer;
+    background: none; border: none; padding: 4px; font-family: inherit;
+    color: inherit; appearance: none; -webkit-appearance: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .step:hover, .step:focus-visible { opacity: 0.7; }
+  .step:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+  .step.active { opacity: 1; cursor: default; }
+  .step-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); }
+  .step.active .step-dot { background: var(--accent); }
+  .step-label { font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; }
+
+  /* ---------- BARRA DE PASOS EN MÓVIL ---------- */
+  #mobileSteps { display: none; }
+  .mstep {
+    flex: 1; font-family: inherit; font-size: 11px; font-weight: 500;
+    padding: 9px 4px; border-radius: 7px;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.03);
+    color: var(--text-dim); text-align: center; white-space: nowrap; cursor: pointer;
+  }
+  .mstep.active { border-color: var(--accent); color: var(--accent); background: rgba(255,255,255,0.09); }
+
+  /* ---------- BARRA INFERIOR DE CONTROLES (solo celular) ---------- */
+  #mobileDock { display: none; }
+  .dock-tab {
+    flex: 1; font-family: inherit; font-size: 11px; font-weight: 500;
+    padding: 9px 4px; border-radius: 7px 7px 0 0;
+    border: 1px solid var(--line); border-bottom: none;
+    background: rgba(255,255,255,0.03); color: var(--text-dim);
+    cursor: pointer; white-space: nowrap;
+  }
+  .dock-tab.active { border-color: var(--accent); color: var(--accent); background: rgba(255,255,255,0.09); }
+
+  /* ---------- PEDIDO ---------- */
+  #orderModal {
+    position: absolute; inset: 0; z-index: 10;
+    background: rgba(0,0,0,0.6);
+    display: none; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  #orderModal .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 26px 28px; width: 360px; max-width: 100%;
+    max-height: calc(100vh - 48px); display: flex; flex-direction: column;
+  }
+  #orderModal form { overflow-y: auto; min-height: 0; }
+  #orderModal h2 { font-size: 16px; margin: 0 0 4px; }
+  #orderModal .subtitle { font-size: 12px; color: var(--text-dim); margin: 0 0 18px; }
+  #orderModal label {
+    display: block; font-size: 11px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.03em; margin: 14px 0 6px;
+  }
+  #orderModal input, #orderModal select, #orderModal textarea {
+    width: 100%; font-family: inherit; font-size: 13px;
+    background: rgba(255,255,255,0.04); color: var(--text);
+    border: 1px solid var(--line); border-radius: 7px; padding: 9px 10px;
+  }
+  #orderModal textarea { resize: vertical; min-height: 60px; }
+  #orderModal input:focus, #orderModal select:focus, #orderModal textarea:focus { outline: 1px solid var(--accent); }
+  .whatsapp-row { display: grid; grid-template-columns: 130px 1fr; gap: 8px; }
+  .whatsapp-row label { grid-column: 1 / -1; }
+
+  /* En escritorio el formulario se abre a dos columnas: datos a la izquierda,
+     pago y comprobante a la derecha. Así deja de ser una tira vertical que
+     obliga a hacer scroll dentro del modal. */
+  #orderModal .form-grid { display: block; }
+  #orderModal .form-col > *:first-child { margin-top: 0; }
+
+  html:not(.is-mobile) #orderModal .card { width: 800px; padding: 30px 34px; max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
+  html:not(.is-mobile) #orderModal .form-grid {
+    display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 0 30px; align-items: start;
+  }
+  html:not(.is-mobile) #orderModal .whatsapp-row { grid-template-columns: 160px 1fr; }
+  html:not(.is-mobile) #orderModal #qrBlock { margin-top: 0; }
+  html:not(.is-mobile) #orderModal .row { margin-top: 22px; }
+  @media (max-width: 820px) {
+    html:not(.is-mobile) #orderModal .card { width: 380px; padding: 26px 28px; max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
+    html:not(.is-mobile) #orderModal .form-grid { display: block; }
+    html:not(.is-mobile) #orderModal #qrBlock { margin-top: 18px; }
+  }
+
+  #qrBlock {
+    margin-top: 18px; padding: 14px; border-radius: 10px;
+    background: rgba(255,255,255,0.03); border: 1px solid var(--line);
+    text-align: center;
+  }
+  #qrBlock img {
+    width: 100%; max-width: 240px; aspect-ratio: 1 / 1; object-fit: contain;
+    background: #fff; border-radius: 8px; padding: 10px;
+  }
+  #qrBlock p { font-size: 12px; color: var(--text-dim); margin: 10px 0 0; line-height: 1.5; }
+  #btnQrDownload {
+    margin-top: 10px; width: 100%; font-family: inherit; font-size: 12px; padding: 9px;
+    border-radius: 7px; border: 1px solid var(--line);
+    background: rgba(255,255,255,0.04); color: var(--text); cursor: pointer;
+  }
+  #btnQrDownload:hover { background: rgba(255,255,255,0.1); }
+
+  #orderStatus { font-size: 12px; color: var(--text-dim); margin-top: 14px; min-height: 14px; }
+  #orderStatus.error { color: #e08a8a; }
+  #orderStatus.success { color: #8fd19e; }
+  #orderModal .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+  #orderModal .row button { font-family: inherit; font-size: 13px; padding: 10px 16px; border-radius: 7px; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; }
+
+  /* ---------- OVERLAY DE CARGA (Lottie) ---------- */
+  #loadingOverlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(10,10,10,0.78);
+    display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 14px;
+  }
+  #loadingOverlay .spinner { width: 84px; height: 84px; }
+  #loadingOverlay .msg { font-size: 12px; color: var(--text-dim); letter-spacing: 0.02em; }
+
+  /* ---------- ENTREGA ---------- */
+  .delivery-row { display: flex; gap: 8px; }
+  .delivery-opt {
+    flex: 1; font-family: inherit; font-size: 12px; padding: 9px 8px;
+    border-radius: 7px; border: 1px solid var(--line); background: rgba(255,255,255,0.03);
+    color: var(--text); cursor: pointer; text-align: center;
+  }
+  .delivery-opt.active { border-color: var(--accent); color: var(--accent); }
+
+  /* ---------- GLOBOS DE AYUDA ---------- */
+  #tourLayer { position: fixed; inset: 0; z-index: 45; pointer-events: none; }
+  .tour-tip {
+    position: absolute; width: 250px; max-width: calc(100vw - 24px);
+    background: var(--panel); border: 1px solid var(--accent);
+    border-radius: 10px; padding: 14px 14px 10px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.5);
+    pointer-events: auto;
+  }
+  .tour-tip p { font-size: 12px; line-height: 1.5; color: var(--text); margin: 0 0 12px; }
+  .tour-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .tour-tip button { font-family: inherit; cursor: pointer; }
+  .tour-tip .tour-close {
+    position: absolute; top: 2px; right: 4px;
+    background: none; border: none; color: var(--text-dim);
+    font-size: 15px; line-height: 1; padding: 6px;
+  }
+  .tour-tip .tour-close:hover { color: var(--text); }
+  .tour-tip .tour-skip {
+    font-size: 11px; color: var(--text-dim);
+    background: none; border: none; padding: 6px 0;
+  }
+  .tour-tip .tour-ok {
+    font-size: 12px; font-weight: 600; padding: 7px 14px;
+    border: none; border-radius: 7px; background: var(--accent); color: #0a0a0a;
+  }
+
+  @media (max-width: 720px) {
+    #topbar { padding: 10px 14px; }
+    #topbar h1 { font-size: 13px; }
+    #hint { display: none; }
+    #panelWrap { top: 50px; right: 12px; max-width: calc(100% - 24px); }
+    #rightPanel { width: min(240px, calc(100vw - 62px)); }
+    #stepper { gap: 14px; padding: 12px 0; }
+    .step-label { font-size: 10px; }
+  }
+
+  /* ---------- LAYOUT DE CELULAR ----------
+     Arriba: los tres pasos, bajados lo suficiente para que el encabezado del
+     sitio que incrusta la app no los pise. Abajo: acabado, giro y vástago en
+     pestañas, con el precio y el botón de confirmar siempre visibles. */
+  .is-mobile #topbar { padding: calc(10px + env(safe-area-inset-top)) 14px 10px; }
+  .is-mobile #topbar h1 { font-size: 13px; }
+  .is-mobile #hint { display: none; }
+  .is-mobile #backLink { display: none; }
+  .is-mobile #panelWrap { display: none !important; }
+  .is-mobile #stepper { display: none; }
+
+  .is-mobile #mobileSteps {
+    position: absolute; top: calc(84px + env(safe-area-inset-top)); left: 10px; right: 10px; z-index: 6;
+    display: flex; gap: 6px;
+    background: rgba(22,22,22,0.94);
+    border: 1px solid var(--line); border-radius: 10px; padding: 5px;
+    backdrop-filter: blur(6px);
+  }
+
+  .is-mobile #mobileDock {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
+    display: block;
+    background: rgba(22,22,22,0.96);
+    border-top: 1px solid var(--line);
+    backdrop-filter: blur(6px);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .is-mobile #dockPanel {
+    display: none;
+    padding: 14px; max-height: 38vh; overflow-y: auto;
+    border-bottom: 1px solid var(--line);
+  }
+  .is-mobile #dockPanel .block + .block { margin-top: 16px; }
+  .is-mobile #dockPanel h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-dim); margin: 0 0 8px;
+  }
+  .is-mobile #dockTabs { display: flex; gap: 6px; padding: 8px 10px 0; }
+  .is-mobile #dockBar { padding: 10px 12px 12px; }
+  .is-mobile #dockBar #blockPrice { display: flex; align-items: center; gap: 12px; }
+  .is-mobile #dockBar #blockPrice h2 { display: none; }
+  .is-mobile #dockBar #priceInfo { flex: 1; min-width: 0; }
+  .is-mobile #dockBar #price { font-size: 17px; margin: 0; }
+  .is-mobile #dockBar #priceMeta { font-size: 10px; margin: 2px 0 0; }
+  .is-mobile #dockBar .confirm { width: auto; flex: none; padding: 11px 16px; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <img id="bgImage" alt="">
+  <canvas id="canvas"></canvas>
+  <div id="labelLayer"></div>
+
+  <div id="topbar">
+    <h1>Topitos — vista 3D</h1>
+    <div class="topbar-right">
+      <a href="index.html" id="backLink">← volver a editar el diseño</a>
+      <button id="btnHelp" type="button" title="Ver las ayudas otra vez" aria-label="Ver las ayudas otra vez">?</button>
+    </div>
+  </div>
+  <div id="hint">arrastrar: orbitar · rueda: zoom · W/E: mover/rotar vástago</div>
+
+  <div id="mobileSteps" role="group" aria-label="Pasos">
+    <button type="button" class="mstep" id="mstepImport">1 · Importar</button>
+    <button type="button" class="mstep" id="mstepScale">2 · Escalar</button>
+    <button type="button" class="mstep active" id="mstepExtrude">3 · Ver en 3D</button>
+  </div>
+
+  <div id="panelWrap">
+    <button id="panelToggle" type="button" aria-label="Ocultar panel" aria-expanded="true">›</button>
+    <div id="rightPanel">
+      <div class="block" id="blockFinish">
+        <h2>Acabado</h2>
+        <div class="finishes">
+          <button class="finish-btn" data-finish="plata-mate">Plata mate</button>
+          <button class="finish-btn" data-finish="plata-brillante">Plata brillante</button>
+          <button class="finish-btn" data-finish="oro-mate">Oro mate</button>
+          <button class="finish-btn" data-finish="oro-brillante">Oro brillante</button>
+        </div>
+      </div>
+
+      <div class="block" id="blockFlip">
+        <h2>Simetría</h2>
+        <button id="btnFlip" class="panel-btn" type="button">Voltear un lado</button>
+      </div>
+
+      <div class="block" id="blockRot">
+        <h2>Rotación <span class="sublabel">sobre el eje del vástago</span></h2>
+        <div class="slider-label"><span>Ángulo</span><span id="rotValue">0°</span></div>
+        <input id="rotSlider" type="range" min="0" max="360" step="1" value="0">
+      </div>
+
+      <div class="block" id="blockStem">
+        <h2>Vástago <span class="sublabel">tipo de poste</span></h2>
+        <div id="stemOptions" role="group" aria-label="Tipo de vástago"></div>
+        <div id="stemStatus" role="status"></div>
+    <button id="btnStemToggle" class="panel-btn" type="button">
+        Mover Vástago
+    </button>
+      </div>
+
+      <div class="block" id="blockPrice">
+        <h2>Valor estimado</h2>
+        <div id="priceInfo">
+          <div id="price">$0</div>
+          <div id="priceMeta"></div>
+        </div>
+        <button id="btnConfirm" class="confirm" type="button">Confirmar pedido</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mobileDock">
+    <div id="dockPanel"></div>
+    <div id="dockTabs">
+      <button type="button" class="dock-tab" data-tab="finish">Acabado</button>
+      <button type="button" class="dock-tab" data-tab="turn">Girar</button>
+      <button type="button" class="dock-tab" data-tab="stem">Vástago</button>
+    </div>
+    <div id="dockBar"></div>
+  </div>
+
+  <div id="stepper">
+    <button type="button" class="step" id="stepImport"><div class="step-dot"></div><div class="step-label">1 · Importar</div></button>
+    <button type="button" class="step" id="stepDraw"><div class="step-dot"></div><div class="step-label">2 · Dibujar</div></button>
+    <button type="button" class="step active" id="stepExtrude"><div class="step-dot"></div><div class="step-label">3 · Ver en 3D</div></button>
+  </div>
+
+  <div id="orderModal">
+    <div class="card">
+      <h2>Confirmar pedido</h2>
+      <p class="subtitle">Completa tus datos, realiza el pago y sube el comprobante.</p>
+      <form id="orderForm">
+        <div class="form-grid">
+          <div class="form-col">
+            <label for="ofName">Nombre completo</label>
+            <input id="ofName" type="text" autocomplete="given-name" required>
+
+            <label for="ofLastName">Apellidos completos</label>
+            <input id="ofLastName" type="text" autocomplete="family-name" required>
+
+            <label for="ofEmail">Correo electrónico</label>
+            <input id="ofEmail" type="email" autocomplete="email" required>
+
+            <div class="whatsapp-row">
+              <label for="ofWhatsapp">WhatsApp</label>
+              <select id="ofCountryCode" aria-label="Indicativo del país"></select>
+              <input id="ofWhatsapp" type="tel" inputmode="tel" placeholder="Número" required>
+            </div>
+
+            <label>¿Cómo prefieres recibirlo?</label>
+            <div class="delivery-row">
+              <button type="button" class="delivery-opt active" id="btnDeliveryPickup" data-method="recoge">Recoger en tienda</button>
+              <button type="button" class="delivery-opt" id="btnDeliveryShip" data-method="envio">Enviar a domicilio</button>
+            </div>
+            <div id="addressField" style="display:none;">
+              <label for="ofAddress">Dirección de envío</label>
+              <textarea id="ofAddress" placeholder="Dirección completa, ciudad y referencias"></textarea>
+            </div>
+          </div>
+
+          <div class="form-col">
+            <div id="qrBlock">
+              <img id="qrImage" alt="Código QR de pago">
+              <p>Escanea este código QR para realizar el pago. Cuando lo hayas hecho, sube el comprobante en el siguiente campo.</p>
+              <button type="button" id="btnQrDownload">Descargar el código QR</button>
+            </div>
+
+            <label for="ofReceipt">Comprobante de pago</label>
+            <input id="ofReceipt" type="file" accept="image/*" required>
+          </div>
+        </div>
+
+        <div id="orderStatus"></div>
+        <div class="row">
+          <button type="button" id="btnOrderCancel">Cancelar</button>
+          <button type="submit" id="btnOrderSubmit" class="confirm" style="width:auto; padding:10px 18px;">Enviar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="loadingOverlay">
+    <div class="spinner" id="loadingSpinner"></div>
+    <div class="msg" id="loadingMsg">Cargando…</div>
+  </div>
+
+  <div id="tourLayer"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.166.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.166.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+/* ============================================================
+   1. DISEÑO — llega desde el editor (paso 2) vía sessionStorage.
+   El editor guarda además la geometría por segmentos, así que
+   volver atrás con "volver a editar el diseño" no pierde nada.
+   ============================================================ */
+const DESIGN_KEY = 'topitos-design';
+const VIEW_KEY = 'topitos-3d';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxQOfNhcBw8g1Hv7Sdh_JjNQgrLymY5zo4hSpFUiN09K36-UUh1_q1r3MaPWhWfhgPo/exec';
+
+const isMobile = document.documentElement.classList.contains('is-mobile');
+
+/* ============================================================
+   OVERLAY DE CARGA — mismo patrón que index.html: evita que el
+   usuario insista con más clics mientras algo tarda.
+   ============================================================ */
+const LOADING_LOTTIE_JSON = {
+  v: '5.9.0', fr: 30, ip: 0, op: 90, w: 200, h: 200, nm: 'spinner', ddd: 0, assets: [],
+  layers: [{
+    ddd: 0, ind: 1, ty: 4, nm: 'ring', sr: 1,
+    ks: {
+      o: { a: 0, k: 100 },
+      r: { a: 1, k: [{ t: 0, s: [0] }, { t: 90, s: [360] }] },
+      p: { a: 0, k: [100, 100, 0] },
+      a: { a: 0, k: [0, 0, 0] },
+      s: { a: 0, k: [100, 100, 100] },
     },
-    prelude: {
-      logo: cell(ss, 'PRELUDE', 'A2'),
-      scale: cell(ss, 'PRELUDE', 'B2'),
-      color: cell(ss, 'PRELUDE', 'C2'),
-    },
-    pricing: {
-      plataBrillante: cell(ss, 'PRICING', 'B1'),
-      plataMate: cell(ss, 'PRICING', 'B2'),
-      oroBrillante: cell(ss, 'PRICING', 'B3'),
-      oroMate: cell(ss, 'PRICING', 'B4'),
-    },
-    qr: cell(ss, 'QR', 'A1'),
-    catalog: readCatalog(ss),
-    vastagos: readStems(ss),
+    ao: 0,
+    shapes: [{
+      ty: 'gr',
+      it: [
+        { ty: 'el', p: { a: 0, k: [0, 0] }, s: { a: 0, k: [130, 130] } },
+        {
+          ty: 'st', c: { a: 0, k: [1, 1, 1, 1] }, o: { a: 0, k: 100 }, w: { a: 0, k: 8 }, lc: 2,
+          d: [{ n: 'd', nm: 'dash', v: { a: 0, k: 160 } }, { n: 'g', nm: 'gap', v: { a: 0, k: 130 } }],
+        },
+        { ty: 'tr', p: { a: 0, k: [0, 0] }, a: { a: 0, k: [0, 0] }, s: { a: 0, k: [100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } },
+      ],
+    }],
+    ip: 0, op: 90, st: 0, bm: 0,
+  }],
+};
+
+let loadingCount = 0;
+let loadingAnim = null;
+function showLoading(message) {
+  loadingCount++;
+  const overlay = document.getElementById('loadingOverlay');
+  document.getElementById('loadingMsg').textContent = message || 'Cargando…';
+  overlay.style.display = 'flex';
+  if (!loadingAnim && window.lottie) {
+    loadingAnim = lottie.loadAnimation({
+      container: document.getElementById('loadingSpinner'), renderer: 'svg', loop: true, autoplay: true,
+      animationData: LOADING_LOTTIE_JSON,
+    });
+  }
+}
+function hideLoading() {
+  loadingCount = Math.max(0, loadingCount - 1);
+  if (loadingCount === 0) document.getElementById('loadingOverlay').style.display = 'none';
+}
+showLoading('Cargando tu diseño…');
+
+/* ============================================================
+   GLOBOS DE AYUDA — mismas reglas que en el editor: uno a la vez,
+   en cola, nunca encima del overlay de carga ni del formulario de
+   pedido, y solo cuando el control del que hablan ya está en
+   pantalla.
+   ============================================================ */
+const TOUR_KEY = 'topitos-tour-3d';
+const TOUR_OFF_KEY = TOUR_KEY + ':off';
+
+let tourSeen = new Set();
+try { tourSeen = new Set(JSON.parse(sessionStorage.getItem(TOUR_KEY) || '[]')); } catch (e) {}
+let tourOff = false;
+try { tourOff = sessionStorage.getItem(TOUR_OFF_KEY) === '1'; } catch (e) {}
+
+let activeTip = null;
+let tourQueue = [];
+let pumpTimer = null;
+
+function saveTourSeen() {
+  try { sessionStorage.setItem(TOUR_KEY, JSON.stringify(Array.from(tourSeen))); } catch (e) {}
+}
+
+function uiIsBusy() {
+  if (document.getElementById('loadingOverlay').style.display === 'flex') return true;
+  if (document.getElementById('orderModal').style.display === 'flex') return true;
+  return false;
+}
+
+function isOnScreen(el) {
+  if (!el || !el.isConnected) return false;
+  const r = el.getBoundingClientRect();
+  if (!r.width || !r.height) return false;
+  return r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth;
+}
+
+function closeTip() {
+  if (!activeTip) return;
+  window.removeEventListener('resize', activeTip.place);
+  activeTip.el.remove();
+  activeTip = null;
+}
+
+function clearTipQueue() {
+  tourQueue = [];
+  clearTimeout(pumpTimer);
+}
+
+function queueTips(list) {
+  if (tourOff) return;
+  tourQueue = list
+    .filter(t => !tourSeen.has(t.id))
+    .map(t => ({ id: t.id, text: t.text, target: t.target, tries: 0 }));
+  pumpQueue();
+}
+
+function pumpQueue() {
+  clearTimeout(pumpTimer);
+  if (activeTip || !tourQueue.length) return;
+
+  const next = tourQueue[0];
+  const target = typeof next.target === 'function' ? next.target() : next.target;
+
+  if (uiIsBusy() || !isOnScreen(target)) {
+    next.tries++;
+    if (next.tries > 40) tourQueue.shift();
+    pumpTimer = setTimeout(pumpQueue, 250);
+    return;
+  }
+
+  tourQueue.shift();
+  renderTip(next.id, next.text, target);
+}
+
+function renderTip(id, text, target) {
+  const tip = document.createElement('div');
+  tip.className = 'tour-tip';
+  tip.innerHTML =
+    '<button class="tour-close" type="button" aria-label="Cerrar">✕</button>' +
+    '<p></p>' +
+    '<div class="tour-row">' +
+      '<button class="tour-skip" type="button">No mostrar más</button>' +
+      '<button class="tour-ok" type="button">Entendido</button>' +
+    '</div>';
+  tip.querySelector('p').textContent = text;
+  document.getElementById('tourLayer').appendChild(tip);
+
+  const place = () => {
+    const rect = target && target.getBoundingClientRect ? target.getBoundingClientRect() : null;
+    const w = tip.offsetWidth;
+    const h = tip.offsetHeight;
+    let left, top;
+    if (rect && rect.width && rect.height) {
+      left = rect.left + rect.width / 2 - w / 2;
+      top = rect.top > window.innerHeight / 2 ? rect.top - h - 12 : rect.bottom + 12;
+    } else {
+      left = window.innerWidth / 2 - w / 2;
+      top = window.innerHeight / 2 - h / 2;
+    }
+    tip.style.left = Math.max(12, Math.min(left, window.innerWidth - w - 12)) + 'px';
+    tip.style.top = Math.max(12, Math.min(top, window.innerHeight - h - 12)) + 'px';
   };
+  place();
+  window.addEventListener('resize', place);
+  activeTip = { id: id, el: tip, place: place };
 
-  return json(data);
-}
-
-/** Lee una celda sin reventar si la hoja todavía no existe. */
-function cell(ss, sheetName, a1) {
-  const sheet = ss.getSheetByName(sheetName);
-  if (!sheet) return '';
-  return sheet.getRange(a1).getValue();
-}
-
-/** SVG CATALOG!A2:A → vector · B2:B → previsualización · C2:C → tags (separados por coma). */
-function readCatalog(ss) {
-  const sheet = ss.getSheetByName('SVG CATALOG');
-  if (!sheet) return [];
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
-
-  const rows = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
-  return rows
-    .map(function (r) {
-      const tags = String(r[2] || '').split(',').map(function (t) { return t.trim().toLowerCase(); }).filter(Boolean);
-      return { svg: String(r[0] || '').trim(), preview: String(r[1] || '').trim(), tags: tags };
-    })
-    .filter(function (item) { return item.svg; });
-}
-
-/**
- * Vastago!A2:A → url del modelo .glb · B2:B → nombre visible.
- * Una fila sin URL se descarta; una fila con URL pero sin nombre recibe uno
- * genérico para que el botón nunca salga vacío en la app.
- */
-function readStems(ss) {
-  const sheet = ss.getSheetByName('Vastago');
-  if (!sheet) return [];
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
-
-  const rows = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
-  const out = [];
-  rows.forEach(function (r) {
-    const url = String(r[0] || '').trim();
-    if (!url) return;
-    const name = String(r[1] || '').trim() || ('Vástago ' + (out.length + 1));
-    out.push({ url: url, name: name });
+  const markSeen = () => {
+    tourSeen.add(id);
+    saveTourSeen();
+    closeTip();
+    pumpTimer = setTimeout(pumpQueue, 250);
+  };
+  tip.querySelector('.tour-close').addEventListener('click', markSeen);
+  tip.querySelector('.tour-ok').addEventListener('click', markSeen);
+  tip.querySelector('.tour-skip').addEventListener('click', () => {
+    tourOff = true;
+    try { sessionStorage.setItem(TOUR_OFF_KEY, '1'); } catch (e) {}
+    clearTipQueue();
+    closeTip();
   });
+}
+
+function startTour() {
+  if (isMobile) {
+    queueTips([
+      { id: 'controles', text: 'Toca cada pestaña para cambiar el acabado, girar la pieza o elegir el tipo de vástago.', target: () => document.getElementById('dockTabs') },
+      { id: 'precio', text: 'El precio sale del largo de tu figura y ya cubre el par de aretes. Confirma cuando esté lista.', target: () => document.getElementById('btnConfirm') },
+      { id: 'volver', text: 'Puedes volver a cambiar el motivo o su tamaño cuando quieras: tu diseño se conserva.', target: () => document.getElementById('mobileSteps') },
+    ]);
+  } else {
+    queueTips([
+      { id: 'controles', text: 'Desde aquí eliges el acabado, giras la pieza y escoges el tipo de vástago (W para moverlo, E para rotarlo).', target: () => document.getElementById('rightPanel') },
+      { id: 'precio', text: 'El precio sale del largo de tu figura y ya cubre el par de aretes. Confirma cuando esté lista.', target: () => document.getElementById('btnConfirm') },
+    ]);
+  }
+}
+
+document.getElementById('btnHelp').addEventListener('click', () => {
+  tourSeen.clear();
+  saveTourSeen();
+  tourOff = false;
+  try { sessionStorage.removeItem(TOUR_OFF_KEY); } catch (e) {}
+  closeTip();
+  clearTipQueue();
+  startTour();
+});
+
+const PIECE_DEPTH_MM = 0.8;
+const STEM_LENGTH_MM = 10;
+const UNITS_PER_PAIR = 2; // un pedido son siempre dos aretes
+
+let design = null;
+try {
+  const raw = sessionStorage.getItem(DESIGN_KEY);
+  if (raw) design = JSON.parse(raw);
+} catch (err) { console.warn('No se pudo leer el diseño guardado:', err); }
+
+if (!design || !design.outerSVG) {
+  console.warn('No hay diseño en sessionStorage — se usa una figura de muestra.');
+  design = {
+    outerSVG: 'M5,1 C7,1 9,3 9,5 C9,7 7,9 5,9 C3,9 1,7 1,5 C1,3 3,1 5,1 Z',
+    holeSVG: 'M5,3.3 C6,3.3 6.7,4 6.7,5 C6.7,6 6,6.7 5,6.7 C4,6.7 3.3,6 3.3,5 C3.3,4 4,3.3 5,3.3 Z',
+    totalLengthMm: 30,
+  };
+}
+
+/* Estado de la vista, para que volver al 2D y regresar no reinicie nada. */
+let viewState = { finish: 'plata-brillante', rotationDeg: 0, flip: 1, stem: null, stemUrl: null };
+try {
+  const raw = sessionStorage.getItem(VIEW_KEY);
+  if (raw) viewState = Object.assign(viewState, JSON.parse(raw));
+} catch (err) { /* estado por defecto */ }
+
+function saveViewState() {
+  viewState.finish = currentFinishKey;
+  viewState.rotationDeg = rotationDeg;
+  viewState.flip = flipB;
+  viewState.stem = { x: stemPos.x, y: stemPos.y, z: stemPos.z };
+  viewState.anchor = { x: pieceAnchor.x, y: pieceAnchor.y, z: pieceAnchor.z };
+  // Tipo de vástago elegido: se guarda la URL porque el orden de la hoja
+  // "Vastago" puede cambiar entre visitas; un índice no sobreviviría a eso.
+  const stemOpt = stemOptions[currentStemIndex];
+  viewState.stemUrl = stemOpt ? stemOpt.url : null;
+  viewState.stemName = stemOpt ? stemOpt.name : '';
+  try { sessionStorage.setItem(VIEW_KEY, JSON.stringify(viewState)); } catch (e) {}
+}
+window.addEventListener('pagehide', saveViewState);
+document.getElementById('backLink').addEventListener('click', saveViewState);
+
+/* Los pasos 1 y 2 viven en index.html — desde aquí solo se vuelve, guardando
+   primero el estado de la vista 3D como hace "← volver". */
+function backToEditor() {
+  saveViewState();
+  window.location.href = 'index.html';
+}
+document.getElementById('stepImport').addEventListener('click', backToEditor);
+document.getElementById('stepDraw').addEventListener('click', backToEditor);
+document.getElementById('mstepImport').addEventListener('click', backToEditor);
+document.getElementById('mstepScale').addEventListener('click', backToEditor);
+
+/* ============================================================
+   2. ESCENA
+   ============================================================ */
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+// Tope de 2: en pantallas de 3x el coste de sombreado se triplica sin ganancia visible.
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x000000, 0); // transparente — el fondo real lo pone #bgImage detrás
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+const scene = new THREE.Scene();
+scene.background = null;
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.035).texture;
+
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 400);
+camera.position.set(10, 9, 22);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 0, 0);
+
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+keyLight.position.set(5, 8, 6);
+scene.add(keyLight);
+scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  labelRenderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* Renderer aparte para las etiquetas de texto de las cotas: son HTML real
+   (nítido a cualquier zoom) posicionado por Three.js en cada frame según la
+   posición 3D del punto al que está anclada — por eso "orbitan" junto con
+   la pieza cuando el usuario mueve la cámara. */
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(window.innerWidth, window.innerHeight);
+document.getElementById('labelLayer').appendChild(labelRenderer.domElement);
+
+/* ============================================================
+   3. ACABADOS — 4 combinaciones plata/oro × mate/brillante,
+   compartidas por la pieza, el vástago y el clutch.
+   DoubleSide es necesario porque el arete derecho es un espejo
+   (escala negativa en X), lo que invierte el orden de las caras.
+   ============================================================ */
+const FINISHES = {
+  'plata-mate':      { color: 0xc7c9cc, roughness: 0.55 },
+  'plata-brillante': { color: 0xd9dbdd, roughness: 0.08 },
+  'oro-mate':        { color: 0xcda158, roughness: 0.55 },
+  'oro-brillante':   { color: 0xe6b76b, roughness: 0.08 },
+};
+let currentFinishKey = FINISHES[viewState.finish] ? viewState.finish : 'plata-brillante';
+
+const material = new THREE.MeshPhysicalMaterial({
+  color: FINISHES[currentFinishKey].color,
+  metalness: 1,
+  roughness: FINISHES[currentFinishKey].roughness,
+  clearcoat: 0.15,
+  side: THREE.DoubleSide,
+});
+
+function applyFinish(key) {
+  if (!FINISHES[key]) return;
+  currentFinishKey = key;
+  material.color.setHex(FINISHES[key].color);
+  material.roughness = FINISHES[key].roughness;
+  material.needsUpdate = true;
+  document.querySelectorAll('.finish-btn').forEach(b => b.classList.toggle('active', b.dataset.finish === key));
+  updatePrice();
+}
+
+/* ============================================================
+   4. GEOMETRÍA DE LA PIEZA (0.8mm, con el agujero si existe)
+   El centrado se hace sobre el conjunto, no geometría por
+   geometría: si el SVG produce varias formas, centrarlas una a
+   una las desalinea entre sí.
+   ============================================================ */
+function buildPieceGeometries() {
+  const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg">
+    <path d="${design.outerSVG} ${design.holeSVG || ''}" fill-rule="evenodd"/>
+  </svg>`;
+  const parsed = new SVGLoader().parse(svgMarkup);
+
+  const geometries = [];
+  parsed.paths.forEach((path) => {
+    SVGLoader.createShapes(path).forEach((shape) => {
+      const geometry = new THREE.ExtrudeGeometry(shape, {
+        depth: PIECE_DEPTH_MM,
+        bevelEnabled: true,
+        bevelThickness: 0.05,
+        bevelSize: 0.05,
+        bevelSegments: 2,
+        curveSegments: 32,
+      });
+      geometry.rotateX(Math.PI); // el SVG queda con la Y invertida respecto a Three
+      geometries.push(geometry);
+    });
+  });
+
+  const box = new THREE.Box3();
+  geometries.forEach((g) => { g.computeBoundingBox(); box.union(g.boundingBox); });
+  const center = box.getCenter(new THREE.Vector3());
+  geometries.forEach((g) => g.translate(-center.x, -center.y, -center.z));
+
+  return { geometries, size: box.getSize(new THREE.Vector3()) };
+}
+
+const { geometries: pieceGeometries, size: pieceSize } = buildPieceGeometries();
+
+/* ============================================================
+   5. EL PAR — dos aretes espejados. Cada uno lleva su propio
+   vástago y clutch; el Control de Movimiento mueve el del arete
+   izquierdo y el derecho replica el movimiento en espejo.
+   ============================================================ */
+const rodGeometry = new THREE.CylinderGeometry(0.4, 0.4, STEM_LENGTH_MM, 20);
+const clutchDiscGeometry = new THREE.CylinderGeometry(0.9, 0.9, 0.35, 20);
+const clutchRingGeometry = new THREE.TorusGeometry(0.55, 0.14, 10, 24);
+
+function buildEarring() {
+  const group = new THREE.Group();
+
+  /* La figura cuelga de un pivote situado en el vástago. Así el giro ocurre
+     alrededor del eje del poste (que es lo que queda fijo en la oreja) y no
+     alrededor del centro de la figura. */
+  const pivot = new THREE.Group();
+  const pieceHolder = new THREE.Group();
+  pieceGeometries.forEach(g => pieceHolder.add(new THREE.Mesh(g, material)));
+  pivot.add(pieceHolder);
+  group.add(pivot);
+
+  /* El contenido del vástago se rellena aparte (setStemContent): puede ser el
+     poste dibujado por código o un modelo .glb traído de la hoja "Vastago". */
+  const stem = new THREE.Group();
+  group.add(stem);
+
+  return { group, pivot, pieceHolder, stem };
+}
+
+const spacing = Math.max(pieceSize.x, 4) * 0.75;
+
+const holderA = new THREE.Group(); holderA.position.x = -spacing;
+const holderB = new THREE.Group(); holderB.position.x = spacing;
+scene.add(holderA, holderB);
+
+const A = buildEarring();
+const B = buildEarring();
+holderA.add(A.group);
+holderB.add(B.group);
+const stemA = A.stem;
+
+/* ---------- Vástago dibujado por código ----------
+   Es el que se ve mientras el .glb baja, y el que queda si la hoja "Vastago"
+   está vacía o el modelo no se puede cargar: nunca se muestra un arete sin
+   poste. */
+function buildDefaultStem() {
+  const g = new THREE.Group();
+
+  const rod = new THREE.Mesh(rodGeometry, material);
+  rod.rotation.x = Math.PI / 2;          // el vástago sale hacia +Z
+  rod.position.z = STEM_LENGTH_MM / 2;
+  g.add(rod);
+
+  const clutch = new THREE.Group();
+  clutch.position.z = STEM_LENGTH_MM;    // siempre fijo en la punta
+  const disc = new THREE.Mesh(clutchDiscGeometry, material);
+  disc.rotation.x = Math.PI / 2;
+  clutch.add(disc, new THREE.Mesh(clutchRingGeometry, material));
+  g.add(clutch);
+
+  return g;
+}
+
+/* Reemplaza el poste de los dos aretes por una copia del modelo dado. El grupo
+   "stem" en sí no se toca: es al que está agarrado el Control de Movimiento y
+   el que guarda la posición/inclinación elegida por el cliente.
+
+   OJO con el orden: llama a applyState(), que lee stemPos, stemQuat y
+   pivotQuat. Esos son const declarados más abajo, así que la PRIMERA llamada
+   tiene que ocurrir después de ese bloque de estado — nunca aquí arriba. */
+function setStemContent(template) {
+  [A, B].forEach((E) => {
+    while (E.stem.children.length) E.stem.remove(E.stem.children[0]);
+    E.stem.add(template.clone(true));
+  });
+  applyState();
+}
+
+/* ---------- Cotas flotantes ----------
+   Se anclan como hijas de A.pieceHolder, así que heredan exactamente la
+   misma posición/rotación que la pieza (giro, vástago movido, etc.) — al
+   orbitar la cámara, o al mover/rotar el diseño, las cotas se mueven con
+   él en vez de quedar fijas en la pantalla. Se muestran solo en el arete
+   izquierdo para no duplicar el mismo dato dos veces en pantalla. */
+function addDimensionLine(parent, from, to, text) {
+  const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+  const geometry = new THREE.BufferGeometry().setFromPoints([from, to]);
+  parent.add(new THREE.Line(geometry, lineMat));
+
+  const div = document.createElement('div');
+  div.className = 'dim-label';
+  div.textContent = text;
+  const label = new CSS2DObject(div);
+  label.position.copy(from.clone().add(to).multiplyScalar(0.5));
+  parent.add(label);
+}
+
+const dimGroup = new THREE.Group();
+const dimMargin = Math.max(pieceSize.x, pieceSize.y) * 0.2 + 0.7;
+const halfX = pieceSize.x / 2, halfY = pieceSize.y / 2, halfZ = pieceSize.z / 2;
+
+addDimensionLine(
+  dimGroup,
+  new THREE.Vector3(-halfX, -halfY - dimMargin, halfZ),
+  new THREE.Vector3(halfX, -halfY - dimMargin, halfZ),
+  pieceSize.x.toFixed(1) + 'mm'
+);
+addDimensionLine(
+  dimGroup,
+  new THREE.Vector3(-halfX - dimMargin, -halfY, halfZ),
+  new THREE.Vector3(-halfX - dimMargin, halfY, halfZ),
+  pieceSize.y.toFixed(1) + 'mm'
+);
+A.pieceHolder.add(dimGroup);
+
+/* ---------- Estado compartido por los dos aretes ----------
+   stemPos/stemQuat: dónde está y cómo está inclinado el poste.
+   pieceAnchor:      posición de la figura sin rotar.
+   theta:            giro de la figura alrededor del eje del poste. */
+const stemPos = new THREE.Vector3(0, 0, PIECE_DEPTH_MM / 2);
+const stemQuat = new THREE.Quaternion();
+const pieceAnchor = new THREE.Vector3(0, 0, 0);
+let theta = THREE.MathUtils.degToRad(Number(viewState.rotationDeg) || 0);
+const pivotQuat = new THREE.Quaternion();
+
+if (viewState.stem) stemPos.set(viewState.stem.x, viewState.stem.y, viewState.stem.z);
+if (viewState.anchor) pieceAnchor.set(viewState.anchor.x, viewState.anchor.y, viewState.anchor.z);
+
+/* El eje de giro es el del vástago: su +Z local, ya inclinado si el cliente
+   movió el poste con el Control de Movimiento. */
+function stemAxis() {
+  return new THREE.Vector3(0, 0, 1).applyQuaternion(stemQuat).normalize();
+}
+
+function pieceWorldPosition() {
+  return stemPos.clone().add(pieceAnchor.clone().sub(stemPos).applyQuaternion(pivotQuat));
+}
+
+function applyState() {
+  pivotQuat.setFromAxisAngle(stemAxis(), theta);
+  [A, B].forEach((E) => {
+    E.stem.position.copy(stemPos);
+    E.stem.quaternion.copy(stemQuat);
+    E.pivot.position.copy(stemPos);
+    E.pivot.quaternion.copy(pivotQuat);
+    E.pieceHolder.position.copy(pieceAnchor).sub(stemPos);
+  });
+}
+
+/* Ya con el estado inicializado, se puede montar el poste por defecto.
+   Antes de esta línea, applyState() todavía no tiene con qué trabajar. */
+setStemContent(buildDefaultStem());
+
+/* Al arrastrar el poste, la figura no debe saltar: se recalcula su anclaje
+   para que su posición en pantalla quede donde estaba antes del arrastre. */
+function onStemMoved() {
+  const worldBefore = pieceWorldPosition();
+  stemPos.copy(stemA.position);
+  stemQuat.copy(stemA.quaternion);
+  pivotQuat.setFromAxisAngle(stemAxis(), theta);
+  pieceAnchor.copy(worldBefore).sub(stemPos)
+    .applyQuaternion(pivotQuat.clone().invert())
+    .add(stemPos);
+  applyState();
+}
+
+/* "Voltear" ahora solo afecta al arete B (el derecho); A se queda siempre
+   en su orientación base. Por defecto B nace espejado (-1) para formar el
+   par estándar; el botón alterna B entre espejado y no espejado. */
+let flipB = viewState.flip === 1 ? 1 : -1;
+
+function applyPairTransform() {
+  A.group.scale.x = 1;
+  B.group.scale.x = flipB;
+  applyState();
+}
+applyPairTransform();
+
+/* Encuadre inicial en función del tamaño real de la pieza. */
+(function frameCamera() {
+  const span = Math.max(spacing * 2 + pieceSize.x, STEM_LENGTH_MM);
+  const dist = span * 1.6;
+  camera.position.set(dist * 0.35, dist * 0.32, dist);
+  camera.updateProjectionMatrix();
+  controls.update();
+})();
+
+/* En celular la barra inferior ocupa la parte baja de la pantalla: se corre
+   el punto de mira hacia abajo para que el par quede por encima de ella. */
+if (isMobile) {
+  controls.target.set(0, -Math.max(pieceSize.y * 0.6, 2), 0);
+  controls.update();
+}
+
+/* ============================================================
+   5b. TIPOS DE VÁSTAGO (.glb) — hoja "Vastago": A2:A la URL del
+   modelo, B2:B el nombre que ve el cliente.
+
+   La descarga se hace con fetch a mano, no con GLTFLoader.load:
+   así se distingue un fallo de red/CORS (fetch revienta) de un
+   archivo que llegó bien pero no se pudo interpretar (parse). El
+   loader trae registrados Draco, Meshopt y KTX2, que son las tres
+   compresiones que exportan Rhino, Blender y los conversores en
+   línea — sin ellas, un .glb perfectamente descargado falla en el
+   parse y parece un problema de CORS.
+
+   El modelo se normaliza al llegar: se orienta a lo largo de +Z,
+   se escala a STEM_LENGTH_MM y se apoya su base en z = 0. Así
+   cualquier .glb encaja en el mismo sitio que el poste dibujado
+   por código y el Control de Movimiento sigue funcionando igual.
+   ============================================================ */
+const THREE_CDN = 'https://unpkg.com/three@0.166.0/examples/jsm/';
+
+const dracoLoader = new DRACOLoader().setDecoderPath(THREE_CDN + 'libs/draco/gltf/');
+const ktx2Loader = new KTX2Loader().setTranscoderPath(THREE_CDN + 'libs/basis/').detectSupport(renderer);
+
+const gltfLoader = new GLTFLoader();
+gltfLoader.setDRACOLoader(dracoLoader);
+gltfLoader.setKTX2Loader(ktx2Loader);
+gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+
+const stemTemplates = new Map();   // url → modelo ya normalizado
+let stemOptions = [{ name: 'Clásico', url: null }];
+let currentStemIndex = 0;
+
+const stemOptionsEl = document.getElementById('stemOptions');
+const stemStatusEl = document.getElementById('stemStatus');
+
+function setStemStatus(text, isError) {
+  stemStatusEl.textContent = text || '';
+  stemStatusEl.classList.toggle('error', !!isError);
+}
+
+/* Los .glb de Drive se piden por el endpoint de descarga directa; aun así
+   Drive no manda CORS, así que esto solo ayuda cuando el archivo se sirve
+   desde un proxy que sí las agrega. Cloudinary sí las manda. */
+function normalizeModelUrl(url) {
+  if (typeof url !== 'string') return '';
+  const clean = url.trim();
+  const m = clean.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:[^#]*&)?id=)([\w-]{20,})/);
+  if (m) return 'https://drive.google.com/uc?export=download&id=' + m[1];
+  return clean;
+}
+
+/* Baja el archivo y devuelve lo que GLTFLoader.parse sabe recibir: un
+   ArrayBuffer si es GLB binario, o el texto si es un .gltf en JSON. */
+async function fetchModelData(url) {
+  let res;
+  try {
+    res = await fetch(url, { mode: 'cors' });
+  } catch (err) {
+    throw new Error('el navegador no pudo descargarlo (origen sin CORS o URL inalcanzable)');
+  }
+  if (!res.ok) throw new Error('el servidor respondió ' + res.status);
+
+  const buffer = await res.arrayBuffer();
+  if (buffer.byteLength < 12) throw new Error('el archivo llegó vacío');
+
+  const magic = new TextDecoder().decode(new Uint8Array(buffer, 0, 4));
+  if (magic === 'glTF') return buffer;                    // GLB binario
+
+  const head = new TextDecoder().decode(new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 400))).trim();
+  if (head.charAt(0) === '{') return head.length === buffer.byteLength
+    ? head
+    : new TextDecoder().decode(new Uint8Array(buffer));   // .gltf en JSON
+
+  throw new Error('lo que llegó no es un glTF/GLB — empieza con “' + head.slice(0, 24).replace(/\s+/g, ' ') + '”');
+}
+
+/* Cloudinary entrega los .glb bajo /raw/upload/. Si la hoja tiene la variante
+   /image/upload/ y esa falla, se reintenta con la otra antes de darse por
+   vencido: es el error de copiado más común al armar el catálogo. */
+function urlCandidates(url) {
+  const list = [url];
+  if (url.indexOf('/image/upload/') > -1) list.push(url.replace('/image/upload/', '/raw/upload/'));
+  else if (url.indexOf('/raw/upload/') > -1) list.push(url.replace('/raw/upload/', '/image/upload/'));
+  return list;
+}
+
+async function loadGLB(url) {
+  let lastError = null;
+  for (const candidate of urlCandidates(url)) {
+    try {
+      const data = await fetchModelData(candidate);
+      const basePath = candidate.slice(0, candidate.lastIndexOf('/') + 1);
+      const gltf = await gltfLoader.parseAsync(data, basePath);
+      return gltf.scene;
+    } catch (err) {
+      console.warn('Vástago: falló ' + candidate, err);
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('no se pudo cargar el modelo');
+}
+
+/* Deja el modelo listo para ocupar el lugar del poste: eje largo hacia +Z,
+   10mm de largo, centrado en X/Y y con la base en z = 0. */
+function normalizeStemModel(root) {
+  root.traverse((o) => {
+    if (o.isMesh) {
+      o.material = material;   // el vástago comparte el acabado de la pieza
+      o.castShadow = false;
+      o.receiveShadow = false;
+    }
+  });
+
+  // 1. Orientar el eje más largo hacia +Z.
+  const size = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3());
+  if (size.x >= size.y && size.x >= size.z) root.rotation.y = -Math.PI / 2;      // X → Z
+  else if (size.y >= size.z) root.rotation.x = Math.PI / 2;                       // Y → Z
+  root.updateMatrixWorld(true);
+
+  // 2. Escalar a la longitud real del poste.
+  const wrapper = new THREE.Group();
+  wrapper.add(root);
+  const oriented = new THREE.Box3().setFromObject(wrapper).getSize(new THREE.Vector3());
+  wrapper.scale.setScalar(oriented.z > 0 ? STEM_LENGTH_MM / oriented.z : 1);
+  wrapper.updateMatrixWorld(true);
+
+  // 3. Centrar en X/Y y apoyar la base en z = 0.
+  const box = new THREE.Box3().setFromObject(wrapper);
+  const center = box.getCenter(new THREE.Vector3());
+  wrapper.position.x -= center.x;
+  wrapper.position.y -= center.y;
+  wrapper.position.z -= box.min.z;
+
+  const out = new THREE.Group();
+  out.add(wrapper);
   return out;
 }
 
-function doPost(e) {
+async function stemTemplateFor(url) {
+  if (stemTemplates.has(url)) return stemTemplates.get(url);
+  const template = normalizeStemModel(await loadGLB(url));
+  stemTemplates.set(url, template);
+  return template;
+}
+
+function renderStemOptions(busy) {
+  stemOptionsEl.innerHTML = '';
+  stemOptions.forEach((opt, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'stem-btn' + (i === currentStemIndex ? ' active' : '');
+    b.textContent = opt.name;
+    b.disabled = !!busy;
+    b.setAttribute('aria-pressed', String(i === currentStemIndex));
+    b.addEventListener('click', () => selectStem(i));
+    stemOptionsEl.appendChild(b);
+  });
+}
+
+async function selectStem(index, silent) {
+  const opt = stemOptions[index];
+  if (!opt) return;
+
+  if (!opt.url) {                       // opción sin modelo: el poste de siempre
+    currentStemIndex = index;
+    setStemContent(buildDefaultStem());
+    setStemStatus('');
+    renderStemOptions(false);
+    saveViewState();
+    return;
+  }
+
+  renderStemOptions(true);
+  setStemStatus('Cargando el vástago…');
+  if (!silent) showLoading('Cargando el vástago…');
   try {
-    const body = JSON.parse(e.postData.contents);
+    const template = await stemTemplateFor(opt.url);
+    currentStemIndex = index;
+    setStemContent(template);
+    setStemStatus('');
+    saveViewState();
+  } catch (err) {
+    console.error('No se pudo cargar el vástago "' + opt.name + '":', err);
+    setStemStatus('No se pudo cargar “' + opt.name + '”: ' + (err && err.message ? err.message : err), true);
+  } finally {
+    if (!silent) hideLoading();
+    renderStemOptions(false);
+  }
+}
 
-    // 1. Guardar el comprobante en la carpeta configurada
-    const folder = getReceiptsFolder();
-    const bytes = Utilities.base64Decode(body.receiptBase64);
-    const blob = Utilities.newBlob(bytes, body.receiptMimeType, buildReceiptName(body));
-    const file = folder.createFile(blob);
-    const receiptUrl = file.getUrl();
+/* La lista llega con la configuración. Si la hoja está vacía se queda la
+   opción "Clásico" y el cliente no ve un selector con una sola alternativa
+   inútil. */
+function setupStemOptions(list) {
+  const fromSheet = (Array.isArray(list) ? list : [])
+    .map((it, i) => ({
+      url: normalizeModelUrl(it && it.url),
+      name: String((it && it.name) || '').trim() || ('Vástago ' + (i + 1)),
+    }))
+    .filter(it => it.url);
 
-    // 1b. Subir las 4 miniaturas a Drive y obtener sus URLs
-    const clientName = [body.firstName, body.lastName].filter(String).join(' ').trim() || 'sin nombre';
-    const thumbLabels = ['Superior', 'Izquierda', 'Derecha', 'Perspectiva'];
-    const thumbFields = ['thumbTop', 'thumbLeft', 'thumbRight', 'thumbPerspective'];
-    const thumbUrls = thumbFields.map(function (field, i) {
-      return uploadThumbnail(body[field], thumbLabels[i], clientName, folder);
+  if (!fromSheet.length) {
+    document.getElementById('blockStem').querySelector('h2 .sublabel').textContent = 'posición del poste';
+    stemOptionsEl.style.display = 'none';
+    return;
+  }
+
+  stemOptions = fromSheet;
+  currentStemIndex = 0;
+
+  // Al volver del editor se retoma el mismo vástago que estaba elegido.
+  if (viewState.stemUrl) {
+    const i = stemOptions.findIndex(o => o.url === viewState.stemUrl);
+    if (i > -1) currentStemIndex = i;
+  }
+
+  renderStemOptions(false);
+  selectStem(currentStemIndex, true);
+}
+
+/* ---------- Control de Movimiento (gumball) ---------- */
+const gumball = new TransformControls(camera, renderer.domElement);
+gumball.attach(stemA);
+gumball.setMode('translate');
+gumball.visible = false;
+gumball.enabled = false;
+scene.add(gumball);
+gumball.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
+gumball.addEventListener('objectChange', onStemMoved);
+
+function setGumballMode(mode) {
+  gumball.setMode(mode);
+}
+
+const btnStemToggle = document.getElementById('btnStemToggle');
+btnStemToggle.addEventListener('click', () => {
+  const active = !gumball.enabled;
+  gumball.visible = active;
+  gumball.enabled = active;
+  btnStemToggle.classList.toggle('active', active);
+});
+window.addEventListener('keydown', (e) => {
+  if (!gumball.enabled) return;
+  if (e.key.toLowerCase() === 'w') setGumballMode('translate');
+  if (e.key.toLowerCase() === 'e') setGumballMode('rotate');
+});
+
+/* ---------- Voltear y rotar ---------- */
+document.getElementById('btnFlip').addEventListener('click', () => {
+  flipB = -flipB;
+  applyPairTransform();
+});
+
+const rotSlider = document.getElementById('rotSlider');
+const rotValue = document.getElementById('rotValue');
+let rotationDeg = Math.round(THREE.MathUtils.radToDeg(theta));
+rotSlider.value = String(rotationDeg);
+rotValue.textContent = rotationDeg + '°';
+rotSlider.addEventListener('input', (e) => {
+  rotationDeg = Number(e.target.value);
+  rotValue.textContent = rotationDeg + '°';
+  theta = THREE.MathUtils.degToRad(rotationDeg);
+  applyState();
+});
+
+/* ---------- Panel plegable (escritorio) ---------- */
+const panelWrap = document.getElementById('panelWrap');
+const panelToggle = document.getElementById('panelToggle');
+function setPanelCollapsed(collapsed) {
+  panelWrap.classList.toggle('collapsed', collapsed);
+  panelToggle.textContent = collapsed ? '‹' : '›';
+  panelToggle.setAttribute('aria-expanded', String(!collapsed));
+  panelToggle.setAttribute('aria-label', collapsed ? 'Mostrar panel' : 'Ocultar panel');
+}
+panelToggle.addEventListener('click', () => setPanelCollapsed(!panelWrap.classList.contains('collapsed')));
+// En ventanas angostas de escritorio el panel arranca plegado para no tapar la pieza.
+setPanelCollapsed(!isMobile && window.matchMedia('(max-width: 720px)').matches);
+
+/* ---------- Barra inferior de controles (celular) ----------
+   Los mismos bloques del panel lateral, movidos —no duplicados— a una barra
+   con pestañas: así conservan sus eventos y no hay dos fuentes de verdad.
+   El precio y "Confirmar pedido" quedan siempre a la vista; las pestañas se
+   abren y cierran, y nunca tapan la barra de pasos de arriba. */
+if (isMobile) {
+  const dockPanel = document.getElementById('dockPanel');
+  const dockBar = document.getElementById('dockBar');
+  const sections = {
+    finish: [document.getElementById('blockFinish')],
+    turn: [document.getElementById('blockFlip'), document.getElementById('blockRot')],
+    stem: [document.getElementById('blockStem')],
+  };
+
+  Object.keys(sections).forEach((key) => {
+    sections[key].forEach((el) => { el.style.display = 'none'; dockPanel.appendChild(el); });
+  });
+  dockBar.appendChild(document.getElementById('blockPrice'));
+
+  let openTab = null;
+  function renderDock() {
+    Object.keys(sections).forEach((key) => {
+      sections[key].forEach((el) => { el.style.display = key === openTab ? 'block' : 'none'; });
     });
+    dockPanel.style.display = openTab ? 'block' : 'none';
+    document.querySelectorAll('.dock-tab').forEach((b) => {
+      b.classList.toggle('active', b.dataset.tab === openTab);
+    });
+  }
+  document.querySelectorAll('.dock-tab').forEach((b) => {
+    b.addEventListener('click', () => {
+      openTab = openTab === b.dataset.tab ? null : b.dataset.tab;
+      renderDock();
+    });
+  });
+  renderDock();
+}
 
-    // 2. Registrar el pedido. Va antes que compartir y que el correo: son
-    //    pasos secundarios y ninguno debe poder hacer que se pierda la venta.
-    //    Las dos columnas del vástago van al final a propósito: insertarlas en
-    //    la mitad desalinearía las filas que ya existen en la hoja.
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const ordersSheet = ss.getSheetByName('Pedidos');
-    ordersSheet.appendRow([
-      new Date(),
-      body.firstName,
-      body.lastName,
-      body.email,
-      body.countryCode,
-      body.whatsapp,
-      body.finish,
-      body.totalLengthMm,
-      body.pricePerMm,
-      body.quantity || 2,
-      body.unitPrice,
-      body.estimatedPrice,
-      body.rotationDeg,
-      body.mirrored,
-      body.stemPosition ? JSON.stringify(body.stemPosition) : '',
-      body.outerSVG || '',
-      body.holeSVG || '',
-      body.deliveryMethod === 'envio' ? 'Envío a domicilio' : 'Recoge en tienda',
-      body.deliveryMethod === 'envio' ? (body.address || '') : '',
-      receiptUrl,
-      thumbUrls[0],
-      thumbUrls[1],
-      thumbUrls[2],
-      thumbUrls[3],
-      body.stemType || '',
-      body.stemModel || '',
-    ]);
+/* ============================================================
+   6. FONDO, PRECIOS, QR Y VÁSTAGOS DESDE EL SPREADSHEET
+   ============================================================ */
+const PRICE_PER_MM = {
+  'plata-brillante': null,
+  'plata-mate': null,
+  'oro-brillante': null,
+  'oro-mate': null,
+};
 
-    // 3. Intentar abrir el enlace. Muchos dominios de Workspace prohíben
-    //    compartir con "cualquier persona"; si es el caso se prueba con el
-    //    dominio, y si tampoco, el enlace sigue sirviendo para la cuenta dueña.
-    const sharing = shareQuietly(file);
+function normalizeImageUrl(url) {
+  if (typeof url !== 'string') return '';
+  const m = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:[^#]*&)?id=|thumbnail\?(?:[^#]*&)?id=)([\w-]{20,})/);
+  if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1200';
+  return url;
+}
 
-    // 4. Correo de alerta
-    let mailed = true;
-    try {
-      MailApp.sendEmail({
-        to: ALERT_EMAIL,
-        subject: 'Nuevo pedido de Topitos',
-        body:
-          'Nuevo pedido de ' + body.firstName + ' ' + body.lastName + ' (' + body.email + ')\n' +
-          'WhatsApp: ' + body.countryCode + ' ' + body.whatsapp + '\n' +
-          'Acabado: ' + body.finish + '\n' +
-          'Vástago: ' + (body.stemType || '(sin especificar)') + '\n' +
-          'Longitud por pieza: ' + body.totalLengthMm + 'mm\n' +
-          'Cantidad: ' + (body.quantity || 2) + ' aretes\n' +
-          'Valor estimado: $' + body.estimatedPrice + '\n' +
-          'Rotación: ' + body.rotationDeg + '° · Simetría: ' + body.mirrored + '\n' +
-          'Entrega: ' + (body.deliveryMethod === 'envio' ? 'Envío a domicilio — ' + (body.address || '(sin dirección)') : 'Recoge en tienda') + '\n' +
-          'Comprobante: ' + receiptUrl,
-      });
-    } catch (err) {
-      mailed = false;
+async function loadConfig() {
+  try {
+    const res = await fetch(CONFIG_URL);
+    const data = await res.json();
+
+    // Misma variante móvil que index.html: Background A2/B2/C2 si existe.
+    const mobileCfg = (isMobile && data.mobile) || {};
+    const image = mobileCfg.image || data.image;
+    const scale = mobileCfg.scale || data.scale;
+    const color = mobileCfg.color || data.color;
+
+    if (typeof color === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color)) {
+      document.documentElement.style.setProperty('--bg', color);
     }
-
-    return json({ ok: true, receiptUrl: receiptUrl, sharing: sharing, mailed: mailed });
-
-  } catch (err) {
-    return json({ ok: false, error: err.message });
-  }
-}
-
-/** Abre el enlace del comprobante hasta donde la política del dominio permita. */
-function shareQuietly(file) {
-  try {
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    return 'cualquiera con el enlace';
-  } catch (err) {
-    try {
-      file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
-      return 'dominio con el enlace';
-    } catch (err2) {
-      return 'privado (la política del dominio no permite compartir)';
+    if (image) {
+      const img = document.getElementById('bgImage');
+      img.src = normalizeImageUrl(image);
+      const scaleNum = Math.min(100, Math.max(10, Number(scale) || 100));
+      img.style.width = scaleNum + '%';
+      img.style.height = 'auto';
     }
-  }
-}
-
-/**
- * Carpeta de comprobantes. Se usa el ID configurado; si ese ID ya no existe o
- * la cuenta perdió acceso, se cae a una carpeta por nombre para que el pedido
- * no se pierda.
- */
-function getReceiptsFolder() {
-  try {
-    return DriveApp.getFolderById(RECEIPTS_FOLDER_ID);
+    if (data.pricing) {
+      PRICE_PER_MM['plata-brillante'] = Number(data.pricing.plataBrillante) || null;
+      PRICE_PER_MM['plata-mate'] = Number(data.pricing.plataMate) || null;
+      PRICE_PER_MM['oro-brillante'] = Number(data.pricing.oroBrillante) || null;
+      PRICE_PER_MM['oro-mate'] = Number(data.pricing.oroMate) || null;
+    }
+    if (data.qr) {
+      document.getElementById('qrImage').src = normalizeImageUrl(data.qr);
+    }
+    setupStemOptions(data.vastagos);
   } catch (err) {
-    const name = 'Topitos - Comprobantes';
-    const existing = DriveApp.getFoldersByName(name);
-    if (existing.hasNext()) return existing.next();
-    return DriveApp.createFolder(name);
+    console.error('No se pudo cargar el fondo/precios desde el spreadsheet:', err);
+  } finally {
+    updatePrice();
+    hideLoading();
+    // Los letreros esperan a que el overlay de carga se quite: si no, quedan debajo.
+    setTimeout(startTour, 500);
   }
 }
+loadConfig();
 
-/** Nombre legible para el comprobante: fecha, cliente y extensión original. */
-function buildReceiptName(body) {
-  const stamp = Utilities.formatDate(new Date(), 'America/Bogota', 'yyyy-MM-dd HHmm');
-  const who = [body.firstName, body.lastName].filter(String).join(' ').trim() || 'sin nombre';
-  const original = String(body.receiptFileName || '');
-  const dot = original.lastIndexOf('.');
-  const ext = dot > -1 ? original.slice(dot) : '.jpg';
-  return stamp + ' - ' + who + ext;
+/* ============================================================
+   7. COTIZACIÓN — el pedido son dos aretes, así que el valor
+   mostrado y el enviado ya vienen multiplicados por el par.
+   ============================================================ */
+function unitPrice() {
+  const rate = PRICE_PER_MM[currentFinishKey];
+  return rate == null ? null : Math.round(design.totalLengthMm * rate);
 }
 
-/**
- * Sube una miniatura en base64 a Drive, la comparte y devuelve su URL.
- * @param {string} base64Data  – contenido JPEG en base64 (sin prefijo data:)
- * @param {string} label       – nombre legible del archivo (ej. "Superior")
- * @param {string} clientName  – nombre del cliente para el nombre de archivo
- * @param {Folder} folder      – carpeta de Drive destino
- * @returns {string} URL del archivo en Drive
- */
-function uploadThumbnail(base64Data, label, clientName, folder) {
-  if (!base64Data) return '';
-  var stamp = Utilities.formatDate(new Date(), 'America/Bogota', 'yyyy-MM-dd HHmm');
-  var fileName = 'Miniatura ' + label + ' - ' + clientName + ' - ' + stamp + '.jpg';
-  var bytes = Utilities.base64Decode(base64Data);
-  var blob = Utilities.newBlob(bytes, 'image/jpeg', fileName);
-  var file = folder.createFile(blob);
-  shareQuietly(file);
-  return file.getUrl();
+function updatePrice() {
+  const rate = PRICE_PER_MM[currentFinishKey];
+  const priceEl = document.getElementById('price');
+  const metaEl = document.getElementById('priceMeta');
+  if (rate == null) {
+    priceEl.textContent = 'Calculando…';
+    metaEl.textContent = 'Cargando precio desde el spreadsheet';
+    return;
+  }
+  const unit = unitPrice();
+  priceEl.textContent = '$' + (unit * UNITS_PER_PAIR).toLocaleString('es-CO');
+  metaEl.textContent = `Par de 2 aretes · ${design.totalLengthMm}mm × $${rate} = $${unit.toLocaleString('es-CO')} c/u`;
 }
 
-/**
- * Prueba cada servicio por separado y reporta cuál falla.
- * Se consulta como  <URL>/exec?scopes=1
- * No hace llamadas de red, así que funciona aunque falten los permisos.
- */
-function checkScopes() {
-  const result = { ok: true };
+document.querySelectorAll('.finish-btn').forEach((btn) => {
+  btn.addEventListener('click', () => applyFinish(btn.dataset.finish));
+});
+applyFinish(currentFinishKey);
 
-  result.hojas = probe(function () {
-    return SpreadsheetApp.openById(SPREADSHEET_ID).getName();
-  });
-
-  result.drive = probe(function () {
-    // Tiene que probar escritura: leer la carpeta funciona con drive.readonly,
-    // pero guardar el comprobante necesita el permiso completo.
-    const folder = getReceiptsFolder();
-    const test = folder.createFile('topitos-prueba-permisos.txt', 'prueba', MimeType.PLAIN_TEXT);
-    test.setTrashed(true);
-    return folder.getName() + ' (lectura y escritura)';
-  });
-
-  result.correo = probe(function () {
-    return MailApp.getRemainingDailyQuota() + ' envíos restantes';
-  });
-
-  result.vastagos = probe(function () {
-    const stems = readStems(SpreadsheetApp.openById(SPREADSHEET_ID));
-    if (!stems.length) return 'la hoja "Vastago" está vacía (la app usa el poste por defecto)';
-    return stems.map(function (s) { return s.name; }).join(' · ');
-  });
-
-  result.listoParaPedidos = result.hojas.ok && result.drive.ok && result.correo.ok;
-  return json(result);
+/* ============================================================
+   8. FORMULARIO DE PEDIDO
+   ============================================================ */
+const COUNTRY_CODES = [
+  { code: '+57', name: 'Colombia' },
+  { code: '+54', name: 'Argentina' },
+  { code: '+591', name: 'Bolivia' },
+  { code: '+55', name: 'Brasil' },
+  { code: '+56', name: 'Chile' },
+  { code: '+506', name: 'Costa Rica' },
+  { code: '+593', name: 'Ecuador' },
+  { code: '+503', name: 'El Salvador' },
+  { code: '+34', name: 'España' },
+  { code: '+1', name: 'Estados Unidos / Canadá' },
+  { code: '+502', name: 'Guatemala' },
+  { code: '+504', name: 'Honduras' },
+  { code: '+52', name: 'México' },
+  { code: '+505', name: 'Nicaragua' },
+  { code: '+507', name: 'Panamá' },
+  { code: '+595', name: 'Paraguay' },
+  { code: '+51', name: 'Perú' },
+  { code: '+1809', name: 'República Dominicana' },
+  { code: '+598', name: 'Uruguay' },
+  { code: '+58', name: 'Venezuela' },
+];
+const countrySelect = document.getElementById('ofCountryCode');
+COUNTRY_CODES.forEach((c) => {
+  const opt = document.createElement('option');
+  // El value lleva el nombre para que no colisionen países con el mismo
+  // indicativo; el prefijo real viaja en dataset.code.
+  opt.value = c.name;
+  opt.dataset.code = c.code;
+  opt.textContent = `${c.name} (${c.code})`;
+  countrySelect.appendChild(opt);
+});
+countrySelect.value = 'Colombia';
+function selectedCountryCode() {
+  return countrySelect.selectedOptions[0].dataset.code;
 }
 
-function probe(fn) {
+/* Descarga del QR: se baja como blob para que el archivo quede guardado en el
+   dispositivo. Si el origen no manda cabeceras CORS (Drive, por ejemplo) no se
+   puede leer el blob, así que se abre en una pestaña para guardarlo a mano. */
+document.getElementById('btnQrDownload').addEventListener('click', async () => {
+  const src = document.getElementById('qrImage').src;
+  if (!src) return;
   try {
-    return { ok: true, valor: String(fn()) };
+    const res = await fetch(src, { mode: 'cors' });
+    if (!res.ok) throw new Error('respuesta ' + res.status);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'topitos-qr-pago.' + ((blob.type.split('/')[1] || 'png').replace('svg+xml', 'svg'));
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   } catch (err) {
-    return { ok: false, error: err.message };
+    window.open(src, '_blank', 'noopener');
   }
+});
+
+const orderModal = document.getElementById('orderModal');
+const orderForm = document.getElementById('orderForm');
+const orderStatus = document.getElementById('orderStatus');
+const btnOrderSubmit = document.getElementById('btnOrderSubmit');
+
+function setOrderStatus(text, kind) {
+  orderStatus.textContent = text;
+  orderStatus.classList.remove('error', 'success');
+  if (kind) orderStatus.classList.add(kind);
 }
 
-/**
- * Ejecuta esta función a mano desde el editor la primera vez y cada vez que
- * cambien los permisos del proyecto. Toca los cuatro servicios que el script
- * necesita, así el consentimiento de Google los pide todos de una sola vez.
- * Después de autorizar: Implementar → Administrar implementaciones → editar la
- * implementación existente → Nueva versión.
- */
-function authorizeAll() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  Logger.log('Hojas: ' + ss.getSheets().map(function (s) { return s.getName(); }).join(', '));
+document.getElementById('btnConfirm').addEventListener('click', () => {
+  if (PRICE_PER_MM[currentFinishKey] == null) {
+    setOrderStatus('', null);
+    alert('El precio todavía se está cargando desde el spreadsheet — espera un momento.');
+    return;
+  }
+  closeTip();                 // el formulario manda: ningún letrero encima
+  clearTipQueue();
+  setOrderStatus('', null);
+  orderModal.style.display = 'flex';
+});
+document.getElementById('btnOrderCancel').addEventListener('click', () => { orderModal.style.display = 'none'; });
 
-  const folder = getReceiptsFolder();
-  const test = folder.createFile('topitos-prueba-permisos.txt', 'prueba', MimeType.PLAIN_TEXT);
-  test.setTrashed(true);
-  Logger.log('Carpeta de comprobantes: ' + folder.getName() + ' (escritura confirmada)');
+/* ---------- Entrega: recoger en tienda o enviar a domicilio ---------- */
+let deliveryMethod = 'recoge';
+const btnDeliveryPickup = document.getElementById('btnDeliveryPickup');
+const btnDeliveryShip = document.getElementById('btnDeliveryShip');
+const addressField = document.getElementById('addressField');
+const ofAddress = document.getElementById('ofAddress');
 
-  Logger.log('Cuota de correo restante: ' + MailApp.getRemainingDailyQuota());
+function setDeliveryMethod(method) {
+  deliveryMethod = method;
+  btnDeliveryPickup.classList.toggle('active', method === 'recoge');
+  btnDeliveryShip.classList.toggle('active', method === 'envio');
+  addressField.style.display = method === 'envio' ? 'block' : 'none';
+  ofAddress.required = method === 'envio';
+}
+btnDeliveryPickup.addEventListener('click', () => setDeliveryMethod('recoge'));
+btnDeliveryShip.addEventListener('click', () => setDeliveryMethod('envio'));
 
-  Logger.log('Todos los permisos quedaron concedidos.');
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1]);
+    reader.onerror = () => reject(new Error('no se pudo leer el archivo'));
+    reader.readAsDataURL(file);
+  });
 }
 
-function getOrCreateFolder(name) {
-  const existing = DriveApp.getFoldersByName(name);
-  if (existing.hasNext()) return existing.next();
-  return DriveApp.createFolder(name);
+orderForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const file = document.getElementById('ofReceipt').files[0];
+  if (!file) { setOrderStatus('Adjunta el comprobante de pago.', 'error'); return; }
+  if (file.size > 8 * 1024 * 1024) { setOrderStatus('La imagen pesa más de 8MB. Sube una más liviana.', 'error'); return; }
+  if (deliveryMethod === 'envio' && !ofAddress.value.trim()) {
+    setOrderStatus('Escribe la dirección de envío.', 'error');
+    return;
+  }
+
+  btnOrderSubmit.disabled = true;
+  setOrderStatus('Enviando…', null);
+  showLoading('Enviando tu pedido…');
+
+  try {
+    const receiptBase64 = await fileToBase64(file);
+    const rate = PRICE_PER_MM[currentFinishKey];
+    const unit = unitPrice();
+    const stemOpt = stemOptions[currentStemIndex] || { name: 'Clásico', url: null };
+    const thumbs = captureThumbnails();
+    const payload = {
+      type: 'order',
+      firstName: document.getElementById('ofName').value.trim(),
+      lastName: document.getElementById('ofLastName').value.trim(),
+      email: document.getElementById('ofEmail').value.trim(),
+      countryCode: selectedCountryCode(),
+      whatsapp: document.getElementById('ofWhatsapp').value.trim(),
+      finish: currentFinishKey,
+      totalLengthMm: design.totalLengthMm,
+      pricePerMm: rate,
+      quantity: UNITS_PER_PAIR,
+      unitPrice: unit,
+      estimatedPrice: unit * UNITS_PER_PAIR,
+      rotationDeg,
+      mirrored: flipB === -1 ? 'estándar' : 'volteado (arete derecho)',
+      stemPosition: { x: +stemPos.x.toFixed(3), y: +stemPos.y.toFixed(3), z: +stemPos.z.toFixed(3) },
+      stemType: stemOpt.name,
+      stemModel: stemOpt.url || '',
+      outerSVG: design.outerSVG,
+      holeSVG: design.holeSVG || '',
+      deliveryMethod,
+      address: deliveryMethod === 'envio' ? ofAddress.value.trim() : '',
+      receiptBase64,
+      receiptFileName: file.name,
+      receiptMimeType: file.type || 'image/jpeg',
+      thumbTop: thumbs.thumbTop || '',
+      thumbLeft: thumbs.thumbLeft || '',
+      thumbRight: thumbs.thumbRight || '',
+      thumbPerspective: thumbs.thumbPerspective || '',
+    };
+
+    /* Sin cabecera Content-Type a propósito: así el navegador la envía como
+       petición simple y no dispara el preflight CORS, que Apps Script no
+       responde. Si algún día agregas headers aquí, el POST dejará de pasar. */
+    const res = await fetch(CONFIG_URL, { method: 'POST', body: JSON.stringify(payload) });
+    const result = await res.json();
+    if (!result.ok) throw new Error(result.error || 'error desconocido en el servidor');
+
+    // El nombre viaja a la página de agradecimiento para el saludo personalizado.
+    try { sessionStorage.setItem('topitos-thanks', JSON.stringify({ firstName: payload.firstName })); } catch (e) {}
+    try {
+      sessionStorage.removeItem(DESIGN_KEY);
+      sessionStorage.removeItem(VIEW_KEY);
+      sessionStorage.removeItem('topitos-trace');
+    } catch (e) {}
+
+    window.location.href = 'gracias.html';
+  } catch (err) {
+    console.error(err);
+    setOrderStatus('No se pudo enviar el pedido: ' + err.message, 'error');
+    hideLoading();
+  } finally {
+    btnOrderSubmit.disabled = false;
+  }
+});
+
+/* ============================================================
+   9. MINIATURAS — 4 vistas ligeras del diseño para la hoja Pedidos.
+   ============================================================ */
+function captureThumbnails() {
+  const thumbSize = 400;
+  const tmpCanvas = document.createElement('canvas');
+  tmpCanvas.width = thumbSize;
+  tmpCanvas.height = thumbSize;
+  const tmpRenderer = new THREE.WebGLRenderer({ canvas: tmpCanvas, antialias: true, alpha: true });
+  tmpRenderer.setPixelRatio(1);
+  tmpRenderer.setSize(thumbSize, thumbSize);
+  tmpRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+  tmpRenderer.setClearColor(0x0a0a0a, 1);
+
+  const thumbCam = new THREE.PerspectiveCamera(40, 1, 0.1, 400);
+  const span = Math.max(spacing * 2 + pieceSize.x, STEM_LENGTH_MM);
+  const dist = span * 1.8;
+  const views = [
+    { name: 'superior', pos: [0, dist * 0.9, 0.01], target: [0, 0, 0] },
+    { name: 'izquierda', pos: [-dist * 0.9, 0, 0], target: [0, 0, 0] },
+    { name: 'derecha', pos: [dist * 0.9, 0, 0], target: [0, 0, 0] },
+    { name: 'perspectiva', pos: [dist * 0.45, dist * 0.35, dist * 0.6], target: [0, 0, 0] },
+  ];
+  const thumbKeys = ['thumbTop', 'thumbLeft', 'thumbRight', 'thumbPerspective'];
+  const thumbs = {};
+
+  views.forEach((v, i) => {
+    thumbCam.position.set(v.pos[0], v.pos[1], v.pos[2]);
+    thumbCam.lookAt(v.target[0], v.target[1], v.target[2]);
+    thumbCam.updateProjectionMatrix();
+    tmpRenderer.render(scene, thumbCam);
+    thumbs[thumbKeys[i]] = tmpCanvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+  });
+
+  tmpRenderer.dispose();
+  thumbCam.clear();
+  return thumbs;
 }
 
-function json(obj) {
-  return ContentService
-    .createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
+/* ============================================================
+   10. LOOP
+   ============================================================ */
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
 }
-
-/** Crea la fila de encabezados en "Pedidos". Ejecútala una sola vez, a mano. */
-function setupOrdersHeader() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Pedidos');
-  sheet.insertRowBefore(1);
-  sheet.getRange(1, 1, 1, 26).setValues([[
-    'Fecha', 'Nombre', 'Apellidos', 'Correo', 'Indicativo', 'WhatsApp',
-    'Acabado', 'Longitud (mm)', 'Precio por mm', 'Cantidad', 'Precio unitario',
-    'Precio total', 'Rotación', 'Simetría', 'Vástago', 'SVG contorno', 'SVG agujero',
-    'Entrega', 'Dirección', 'Comprobante',
-    'Miniatura Superior', 'Miniatura Izquierda', 'Miniatura Derecha', 'Miniatura Perspectiva',
-    'Tipo de vástago', 'Modelo de vástago',
-  ]]).setFontWeight('bold');
-}
-
-/**
- * Si la hoja "Pedidos" ya tenía encabezados de 20 columnas, ejecuta esto una
- * sola vez para agregar las nuevas sin tocar las filas existentes.
- */
-function addStemColumnsHeader() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Pedidos');
-  sheet.getRange(1, 21, 1, 6)
-    .setValues([['Miniatura Superior', 'Miniatura Izquierda', 'Miniatura Derecha', 'Miniatura Perspectiva', 'Tipo de vástago', 'Modelo de vástago']])
-    .setFontWeight('bold');
-}
+animate();
+</script>
+</body>
+</html>
