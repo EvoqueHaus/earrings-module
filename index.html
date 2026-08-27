@@ -137,7 +137,8 @@
   button.danger { color: var(--danger); }
   button.active { border-color: var(--accent); color: var(--accent); }
 
-  #btnUndo, #btnRedo { font-size: 20px; padding: 6px 10px; min-width: 38px; }
+  #btnUndo, #btnRedo { font-size: 20px; padding: 6px 10px; min-width: 38px; display: flex; align-items: center; gap: 6px; }
+  #btnUndo .undo-label, #btnRedo .undo-label { font-size: 12px; }
 
   #bgImage {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -488,11 +489,10 @@
       </div>
       <div class="block">
         <h2>Controles</h2>
-        <button id="btnUndo" disabled title="Deshacer (Ctrl+Z)" aria-label="Deshacer">↶</button>
-        <button id="btnRedo" disabled title="Rehacer (Ctrl+Y)" aria-label="Rehacer">↷</button>
+        <button id="btnUndo" disabled title="Deshacer (Ctrl+Z)" aria-label="Deshacer"><span class="undo-icon">↶</span><span class="undo-label">Deshacer</span></button>
+        <button id="btnRedo" disabled title="Rehacer (Ctrl+Y)" aria-label="Rehacer"><span class="undo-icon">↷</span><span class="undo-label">Rehacer</span></button>
         <button id="btnTrace">Calcar imagen</button>
         <button id="btnSmooth" disabled>Suavizar trazo</button>
-        <button id="btnHole" disabled>Agregar agujero interno</button>
         <button id="btnNodeEdit" disabled>Editar nodos</button>
         <button id="btnMove" disabled>Mover diseño</button>
       </div>
@@ -525,7 +525,7 @@
   <div id="catalogScreen">
     <div class="card">
       <h2>Biblioteca de motivos</h2>
-      <p class="subtitle">Elige un motivo. Podrás editar sus nodos, suavizarlo o agregarle un agujero antes de aceptar.</p>
+      <p class="subtitle">Elige un motivo. Podrás editar sus nodos, suavizarlo o aceptarlo directamente.</p>
       <input type="text" id="catalogSearch" placeholder="Buscar por etiqueta…">
       <div id="catalogGrid"></div>
       <div id="catalogStatus">Cargando motivos…</div>
@@ -567,7 +567,6 @@
    ============================================================ */
 const SQUARE_MM = 10;
 const CLOSE_THRESHOLD_MM = 0.2;
-const MIN_BRIDGE_MM = 1;
 const MIN_ZOOM = 8;
 const MAX_ZOOM = 400;
 
@@ -820,7 +819,7 @@ function tipsForStage() {
   } else {
     queueTips([{
       id: 'dibujo',
-      text: 'Cierra la figura volviendo al primer punto. Después puedes suavizar el trazo, editar nodos o agregar un agujero, y aceptar el diseño.',
+      text: 'Cierra la figura volviendo al primer punto. Después puedes suavizar el trazo, editar nodos y aceptar el diseño.',
       target: () => $('drawPanel'),
     }]);
   }
@@ -953,7 +952,7 @@ drawLayer.activate();
    ============================================================ */
 let outerPath = null;
 let holePath = null;
-let mode = 'outer';       // 'outer' | 'hole' | 'review-outer' | 'review-hole'
+let mode = 'outer';       // 'outer' | 'review-outer'
 let nodeDragChanged = false;
 let drawingSegment = null;
 let dragOrigin = null;
@@ -963,7 +962,6 @@ let moveMode = false;
 let moveDragActive = false;
 let moveStart = null;
 let activeNodeHit = null;
-let bridgeOk = true;
 let insideOk = true;
 let noSelfIntersection = true;
 
@@ -990,7 +988,7 @@ function restorePathData(data) {
 }
 
 function saveUndoState() {
-  undoStack.push({ outer: snapshotPath(outerPath), hole: snapshotPath(holePath), mode });
+  undoStack.push({ outer: snapshotPath(outerPath), mode });
   if (undoStack.length > MAX_UNDO) undoStack.shift();
   redoStack.length = 0;
   updateUndoRedoButtons();
@@ -998,12 +996,10 @@ function saveUndoState() {
 
 function doUndo() {
   if (!undoStack.length) return;
-  redoStack.push({ outer: snapshotPath(outerPath), hole: snapshotPath(holePath), mode });
+  redoStack.push({ outer: snapshotPath(outerPath), mode });
   const state = undoStack.pop();
   if (outerPath) outerPath.remove();
-  if (holePath) holePath.remove();
   outerPath = restorePathData(state.outer);
-  holePath = restorePathData(state.hole);
   mode = state.mode;
   updateUndoRedoButtons();
   updateUIAfterStateChange();
@@ -1011,12 +1007,10 @@ function doUndo() {
 
 function doRedo() {
   if (!redoStack.length) return;
-  undoStack.push({ outer: snapshotPath(outerPath), hole: snapshotPath(holePath), mode });
+  undoStack.push({ outer: snapshotPath(outerPath), mode });
   const state = redoStack.pop();
   if (outerPath) outerPath.remove();
-  if (holePath) holePath.remove();
   outerPath = restorePathData(state.outer);
-  holePath = restorePathData(state.hole);
   mode = state.mode;
   updateUndoRedoButtons();
   updateUIAfterStateChange();
@@ -1029,9 +1023,7 @@ function updateUndoRedoButtons() {
 
 function updateUIAfterStateChange() {
   const hasClosed = outerPath && outerPath.closed;
-  btnSmooth.disabled = !hasClosed || mode === 'hole';
-  btnHole.disabled = !hasClosed;
-  btnHole.textContent = holePath ? 'Quitar agujero interno' : 'Agregar agujero interno';
+  btnSmooth.disabled = !hasClosed;
   btnNodeEdit.disabled = !hasClosed;
   if (!isMobile) {
     btnMove.disabled = !hasClosed;
@@ -1049,7 +1041,6 @@ function updateUIAfterStateChange() {
     btnNodeEdit.textContent = 'Editar nodos';
   }
   if (outerPath) outerPath.fullySelected = nodeEditMode;
-  if (holePath) holePath.fullySelected = nodeEditMode;
   revalidateBridge();
 }
 
@@ -1062,7 +1053,6 @@ const readout = $('readout');
 const warning = $('warning');
 const btnTrace = $('btnTrace');
 const btnSmooth = $('btnSmooth');
-const btnHole = $('btnHole');
 const btnNodeEdit = $('btnNodeEdit');
 const btnAccept = $('btnAccept');
 const btnReset = $('btnReset');
@@ -1133,21 +1123,19 @@ tool.onMouseDown = (event) => {
 
   if (nodeEditMode) {
     const hitOptions = { segments: true, handles: true, tolerance: 10 / paper.view.zoom };
-    let hit = outerPath && outerPath.hitTest(event.point, hitOptions);
-    if (!hit && holePath) hit = holePath.hitTest(event.point, hitOptions);
+    const hit = outerPath && outerPath.hitTest(event.point, hitOptions);
     activeNodeHit = hit || null;
     if (activeNodeHit) saveUndoState();
     nodeDragChanged = false;
     return;
   }
 
-  if (mode !== 'outer' && mode !== 'hole') return;
+  if (mode !== 'outer') return;
 
   const point = clampToSquare(event.point);
-  const activePath = mode === 'outer' ? outerPath : holePath;
 
-  if (activePath && activePath.segments.length > 2) {
-    const start = activePath.firstSegment.point;
+  if (outerPath && outerPath.segments.length > 2) {
+    const start = outerPath.firstSegment.point;
     if (point.getDistance(start) <= CLOSE_THRESHOLD_MM) {
       saveUndoState();
       closeActivePath();
@@ -1155,12 +1143,10 @@ tool.onMouseDown = (event) => {
     }
   }
 
-  if (mode === 'outer' && !outerPath) outerPath = newPath();
-  if (mode === 'hole' && !holePath) holePath = newPath();
+  if (!outerPath) outerPath = newPath();
 
-  const path = mode === 'outer' ? outerPath : holePath;
   saveUndoState();
-  drawingSegment = path.add(point);
+  drawingSegment = outerPath.add(point);
   lastSegmentAt = Date.now();
   dragOrigin = point;
 };
@@ -1172,7 +1158,6 @@ tool.onMouseDrag = (event) => {
 
   if (moveDragActive) {
     if (outerPath) outerPath.translate(event.delta);
-    if (holePath) holePath.translate(event.delta);
     canvasEl.style.cursor = 'grabbing';
     revalidateBridge();
     return;
@@ -1284,27 +1269,16 @@ canvasEl.addEventListener('touchcancel', () => { multiTouch = false; pinchStart 
    ============================================================ */
 
 /* Al cerrar el contorno ya no se salta al 3D: la figura queda en modo
-   edición para suavizar, mover nodos o agregar el agujero. El paso al 3D
+   edición para suavizar o mover nodos. El paso al 3D
    lo da siempre el botón "Aceptar diseño". */
 function closeActivePath() {
-  if (mode === 'outer') {
-    outerPath.closed = true;
-    enterReviewOuter('Figura cerrada. Suaviza el trazo, edita nodos o agrega un agujero — y acepta cuando esté lista.');
-  } else if (mode === 'hole') {
-    holePath.closed = true;
-    mode = 'review-hole';
-    btnHole.textContent = 'Quitar agujero interno';
-    revalidateBridge();
-    flash(bridgeOk
-      ? 'Agujero agregado. Puedes seguir editando o aceptar el diseño.'
-      : 'El puente quedó por debajo de 1mm — ajusta el agujero para poder aceptar.');
-  }
+  outerPath.closed = true;
+  enterReviewOuter('Figura cerrada. Suaviza el trazo, edita nodos o acepta cuando esté lista.');
 }
 
 function enterReviewOuter(message) {
   mode = 'review-outer';
   btnSmooth.disabled = false;
-  btnHole.disabled = false;
   btnNodeEdit.disabled = false;
   if (!isMobile) {
     btnMove.disabled = false;
@@ -1323,27 +1297,10 @@ function flash(text) {
   flashTimer = setTimeout(() => { readout.textContent = ''; }, 5000);
 }
 
-/* Distancia mínima aproximada entre el agujero y el borde exterior,
-   muestreando puntos a lo largo del agujero. Suficiente para el
-   prototipo; en producción conviene una medida analítica exacta. */
-function minBridgeDistance(outer, hole) {
-  const samples = 120;
-  let min = Infinity;
-  for (let i = 0; i <= samples; i++) {
-    const point = hole.getPointAt((hole.length * i) / samples);
-    if (!point) continue;
-    const nearest = outer.getNearestPoint(point);
-    min = Math.min(min, point.getDistance(nearest));
-  }
-  return min;
-}
-
-/* Caja real que ocupa el diseño completo (contorno + agujero). */
+/* Caja real que ocupa el diseño completo (contorno). */
 function designBounds() {
   if (!outerPath) return null;
-  let b = outerPath.bounds;
-  if (holePath) b = b.unite(holePath.bounds);
-  return b;
+  return outerPath.bounds;
 }
 
 /* El cuadro de 10 × 10 mm es el límite físico de la pieza: si el motivo
@@ -1390,24 +1347,16 @@ function segmentsCross(a1, a2, b1, b2) {
    tanto en el botón de escritorio como en el de celular. El trazo se pinta
    en rojo mientras se sale, para que el motivo del bloqueo sea visible. */
 function revalidateBridge() {
-  if (holePath && holePath.closed && outerPath && outerPath.closed) {
-    bridgeOk = minBridgeDistance(outerPath, holePath) >= MIN_BRIDGE_MM;
-  } else {
-    bridgeOk = true;
-  }
+  bridgeOk = true;
 
   insideOk = fitsInSquare();
-  noSelfIntersection = !(outerPath && outerPath.closed && hasSelfIntersection(outerPath))
-                     && !(holePath && holePath.closed && hasSelfIntersection(holePath));
+  noSelfIntersection = !(outerPath && outerPath.closed && hasSelfIntersection(outerPath));
 
   if (!noSelfIntersection) {
     warning.textContent = 'La curva se cruza a sí misma — corrige la intersección para continuar.';
     warning.style.display = 'block';
   } else if (!insideOk) {
     warning.textContent = 'La figura se sale del área de 10 × 10 mm — reduce el tamaño para continuar.';
-    warning.style.display = 'block';
-  } else if (!bridgeOk) {
-    warning.textContent = 'El puente entre el agujero y el borde es menor a 1 mm — ajusta el agujero para continuar.';
     warning.style.display = 'block';
   } else {
     warning.style.display = 'none';
@@ -1416,17 +1365,15 @@ function revalidateBridge() {
   const valid = insideOk && noSelfIntersection;
   const stroke = valid ? '#ececef' : '#d16565';
   if (outerPath) outerPath.strokeColor = stroke;
-  if (holePath) holePath.strokeColor = stroke;
 
-  const ready = !!outerPath && outerPath.closed && mode !== 'hole';
-  btnAccept.disabled = !(ready && bridgeOk && insideOk && noSelfIntersection);
-  $('btnMobileAdvance').disabled = !(ready && bridgeOk && insideOk && noSelfIntersection);
+  const ready = !!outerPath && outerPath.closed;
+  btnAccept.disabled = !(ready && insideOk && noSelfIntersection);
+  $('btnMobileAdvance').disabled = !(ready && insideOk && noSelfIntersection);
 }
 
 btnSmooth.addEventListener('click', () => {
   if (outerPath && outerPath.closed) saveUndoState();
   if (outerPath) outerPath.smooth({ type: 'continuous' });
-  if (holePath) holePath.smooth({ type: 'continuous' });
   revalidateBridge();
 });
 
@@ -1437,41 +1384,23 @@ btnNodeEdit.addEventListener('click', () => {
   btnNodeEdit.textContent = nodeEditMode ? 'Editar nodos (activo)' : 'Editar nodos';
   canvasEl.style.cursor = nodeEditMode ? 'default' : 'crosshair';
   if (outerPath) outerPath.fullySelected = nodeEditMode;
-  if (holePath) holePath.fullySelected = nodeEditMode;
 });
 
 btnMove.addEventListener('click', () => {
   moveMode = !moveMode;
-  if (moveMode) { nodeEditMode = false; btnNodeEdit.classList.remove('active'); btnNodeEdit.textContent = 'Editar nodos'; if (outerPath) outerPath.fullySelected = false; if (holePath) holePath.fullySelected = false; }
+  if (moveMode) { nodeEditMode = false; btnNodeEdit.classList.remove('active'); btnNodeEdit.textContent = 'Editar nodos'; if (outerPath) outerPath.fullySelected = false; }
   btnMove.classList.toggle('active', moveMode);
   btnMove.textContent = moveMode ? 'Mover diseño (activo)' : 'Mover diseño';
   canvasEl.style.cursor = moveMode ? 'grab' : 'crosshair';
-});
-
-btnHole.addEventListener('click', () => {
-  if (holePath) {
-    holePath.remove();
-    holePath = null;
-    btnHole.textContent = 'Agregar agujero interno';
-    mode = 'review-outer';
-    revalidateBridge();
-    return;
-  }
-  mode = 'hole';
-  flash('Dibuja el agujero. Vuelve al primer punto para cerrarlo.');
-  revalidateBridge();
 });
 
 btnReset.addEventListener('click', resetAll);
 
 function resetAll() {
   if (outerPath) outerPath.remove();
-  if (holePath) holePath.remove();
-  outerPath = null; holePath = null;
+  outerPath = null;
   mode = 'outer';
   btnSmooth.disabled = true;
-  btnHole.disabled = true;
-  btnHole.textContent = 'Agregar agujero interno';
   nodeEditMode = false;
   btnNodeEdit.disabled = true;
   btnNodeEdit.classList.remove('active');
@@ -1730,16 +1659,15 @@ function acceptDesign() {
   revalidateBridge();
   if (!noSelfIntersection) { flash('La curva se cruza a sí misma — corrige la intersección antes de continuar.'); return; }
   if (!insideOk) { flash('La figura se sale del área de 10 × 10 mm — reduce su tamaño para continuar.'); return; }
-  if (!bridgeOk) { flash('El puente mínimo es de 1mm — ajusta el agujero.'); return; }
 
-  const totalLengthMm = outerPath.length + (holePath ? holePath.length : 0);
+  const totalLengthMm = outerPath.length;
   const payload = {
     outerSVG: outerPath.pathData,
-    holeSVG: holePath ? holePath.pathData : null,
+    holeSVG: '',
     totalLengthMm: Number(totalLengthMm.toFixed(3)),
     editor: {
       outer: serializePath(outerPath),
-      hole: holePath ? serializePath(holePath) : null,
+      hole: null,
     },
   };
   sessionStorage.setItem(DESIGN_KEY, JSON.stringify(payload));
@@ -1768,10 +1696,6 @@ function restoreSession() {
     if (data && data.editor && data.editor.outer) {
       drawLayer.activate();
       outerPath = deserializePath(data.editor.outer);
-      if (data.editor.hole) {
-        holePath = deserializePath(data.editor.hole);
-        btnHole.textContent = 'Quitar agujero interno';
-      }
       enterReviewOuter('Diseño recuperado. Puedes seguir editándolo.');
       restored = true;
     }
@@ -1913,29 +1837,19 @@ function styleAsOuter(path) {
   return path;
 }
 
-/* Un CompoundPath se reparte en contorno + agujero: el hijo de mayor área
-   es el contorno, el segundo es el agujero y el resto se descarta (el
-   editor solo maneja un agujero). */
+/* Un CompoundPath se queda con el hijo de mayor área como contorno;
+   el resto se descarta. */
 function adoptImportedItem(item) {
   drawLayer.activate();
   resetAll();
 
-  let outer = item, hole = null;
+  let outer = item;
   if (item instanceof paper.CompoundPath) {
     const kids = item.children.slice().sort((a, b) => Math.abs(b.area || 0) - Math.abs(a.area || 0));
-    const group = new paper.Group();
     outer = kids[0];
-    hole = kids[1] || null;
-    if (outer) group.addChild(outer);
-    if (hole) group.addChild(hole);
-    kids.slice(2).forEach(k => k.remove());
+    kids.slice(1).forEach(k => k.remove());
     item.remove();
-    // Escala contorno y agujero juntos para no romper su relación.
-    fitPathToSquare(group);
-    group.removeChildren();
-    if (outer) drawLayer.addChild(outer);
-    if (hole) drawLayer.addChild(hole);
-    group.remove();
+    fitPathToSquare(outer);
   } else {
     fitPathToSquare(outer);
   }
@@ -1943,13 +1857,7 @@ function adoptImportedItem(item) {
   if (!outer) throw new Error('el trazo no es utilizable');
   outerPath = styleAsOuter(outer);
   outerPath.closed = true;
-  if (hole) {
-    holePath = styleAsOuter(hole);
-    holePath.closed = true;
-    btnHole.textContent = 'Quitar agujero interno';
-    mode = 'review-hole';
-  }
-  enterReviewOuter('Trazo cargado. Suavízalo, edita nodos o agrégale un agujero antes de aceptar.');
+  enterReviewOuter('Trazo cargado. Suavízalo, edita nodos o acepta el diseño.');
   if (isMobile) {
     mobileScaleFactor = 1;
     mobileScaleSlider.value = 100;
@@ -2137,7 +2045,7 @@ if (isMobile) {
   const importP = document.querySelector('#importScreen p');
   if (importP) importP.textContent = 'Elige un motivo de la biblioteca. Desde el celular solo ajustas su tamaño — para subir tu propio archivo o dibujar a mano, entra desde un computador.';
 
-  [btnTrace, btnSmooth, btnHole, btnNodeEdit, $('btnUndo'), $('btnRedo'), btnMove].forEach((b) => { b.style.display = 'none'; });
+  [btnTrace, btnSmooth, btnNodeEdit, $('btnUndo'), $('btnRedo'), btnMove].forEach((b) => { b.style.display = 'none'; });
   canvasEl.style.cursor = 'grab';
 }
 
@@ -2149,7 +2057,6 @@ mobileScaleSlider.addEventListener('input', (e) => {
   const relative = (percent / 100) / mobileScaleFactor;
   const center = new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2);
   outerPath.scale(relative, center);
-  if (holePath) holePath.scale(relative, center);
   mobileScaleFactor = percent / 100;
   $('mobileScaleVal').textContent = percent + '%';
   // Si al crecer se sale del cuadro, revalidateBridge bloquea el paso al 3D.
@@ -2176,7 +2083,6 @@ desktopScaleSlider.addEventListener('input', (e) => {
   const relative = (percent / 100) / desktopScaleFactor;
   const center = new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2);
   outerPath.scale(relative, center);
-  if (holePath) holePath.scale(relative, center);
   desktopScaleFactor = percent / 100;
   $('desktopScaleVal').textContent = percent + '%';
   revalidateBridge();
