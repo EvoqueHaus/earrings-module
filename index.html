@@ -66,6 +66,14 @@
     pointer-events: none;
   }
   #topbar h1 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
+  .topbar-left { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
+  #langBtn {
+    width: 34px; height: 26px; flex: none; padding: 0; border-radius: 7px;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.04);
+    color: var(--text); font-size: 11px; font-weight: 600; line-height: 1;
+    cursor: pointer; letter-spacing: 0.04em;
+  }
+  #langBtn:hover { color: var(--text); border-color: var(--accent); background: rgba(255,255,255,0.08); }
   .topbar-right { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
   #hint { font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; color: var(--text-dim); }
   #btnHelp {
@@ -75,17 +83,17 @@
   }
   #btnHelp:hover { color: var(--text); border-color: var(--accent); background: rgba(255,255,255,0.08); }
   #readout {
-    position: absolute; top: 46px; left: 20px; z-index: 2;
+    position: absolute; top: 120px; left: 20px; z-index: 2;
     font-family: "SFMono-Regular", Menlo, Consolas, monospace;
     font-size: 12px; color: var(--text-dim);
     pointer-events: none;
   }
   #areaNotice {
-    position: absolute; top: 68px; left: 20px; z-index: 2;
+    position: absolute; top: 92px; left: 50%; transform: translateX(-50%); z-index: 2;
     font-size: 11px; color: var(--text-dim);
     background: var(--panel); border: 1px solid var(--line);
     border-radius: 7px; padding: 6px 10px;
-    pointer-events: none;
+    pointer-events: none; white-space: nowrap;
   }
 
   #drawPanelWrap {
@@ -152,6 +160,33 @@
     background: linear-gradient(to top, rgba(28,28,30,0.9), transparent);
     pointer-events: none;
   }
+  /* ---------- ILUSTRACIONES DE FUNCIONES DEL MOUSE (escritorio) ----------
+     Tira pequeña en la parte baja central del editor: recuerda de un vistazo
+     qué hace cada botón y la rueda, justo encima del stepper. Solo en PC. */
+  #mouseHelp {
+    position: absolute; bottom: 76px; left: 50%; transform: translateX(-50%); z-index: 2;
+    display: flex; align-items: center; gap: 16px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 9px; padding: 7px 14px;
+    pointer-events: none;
+  }
+  .mh-item { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--text-dim); }
+  .mouse-ico {
+    position: relative; width: 14px; height: 19px; border: 1.5px solid var(--text-dim);
+    border-radius: 8px;
+  }
+  .mouse-ico::before {
+    content: ''; position: absolute; top: 2px; left: 50%; transform: translateX(-50%);
+    width: 1.5px; height: 5px; background: var(--text-dim);
+  }
+  .kbd-ico {
+    width: 16px; height: 16px; padding: 1px; box-sizing: border-box;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.06);
+    border-radius: 4px; font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 9px; color: var(--text);
+  }
+  .is-mobile #mouseHelp { display: none; }
   .step {
     display: flex; align-items: center; gap: 8px; opacity: 0.4;
     pointer-events: auto; cursor: pointer;
@@ -179,7 +214,7 @@
   .mstep.active { border-color: var(--accent); color: var(--accent); background: rgba(255,255,255,0.09); }
 
   #warning {
-    position: absolute; top: 46px; left: 50%; transform: translateX(-50%); z-index: 2;
+    position: absolute; top: 61px; left: 50%; transform: translateX(-50%); z-index: 2;
     background: rgba(209,101,101,0.15);
     border: 1px solid var(--danger);
     color: #f0b8b8;
@@ -205,6 +240,20 @@
   #importScreen .row { display: flex; flex-direction: column; gap: 8px; }
   #importStatus { font-size: 11px; color: var(--text-dim); margin-top: 12px; min-height: 14px; }
   #importStatus.error { color: var(--danger); }
+
+  /* PANTALLA DE INICIO dividida en escritorio: menú a la derecha y video
+     tutorial a la izquierda. En el celular solo queda el menú (sin video). */
+  .import-split {
+    display: flex; align-items: center; justify-content: center; gap: 28px;
+    max-width: 860px; width: 100%; flex-wrap: wrap;
+  }
+  #importVideoWrap { flex: 1 1 360px; max-width: 480px; }
+  #importVideo {
+    width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; background: #000;
+    display: block;
+  }
+  .is-mobile #importVideoWrap { display: none; }
+  .is-mobile .import-split { gap: 0; }
 
   /* ---------- BIBLIOTECA DE MOTIVOS ---------- */
   #catalogScreen {
@@ -238,7 +287,7 @@
 
   /* ---------- PANEL DE CALCO ---------- */
   #tracePanel {
-    position: absolute; top: 56px; right: 16px; z-index: 3;
+    position: absolute; top: 150px; left: 20px; right: auto; z-index: 3;
     width: 210px;
     background: var(--panel);
     border: 1px solid var(--line);
@@ -309,6 +358,47 @@
   #mobileScalePanel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 8px; }
   #mobileScalePanel input[type=range] { width: 100%; accent-color: var(--accent); }
 
+  /* ---------- PANEL DE TUTORIAL (video) ----------
+     Se abre con "Ver tutorial" en el modo de dibujo: aparece a la izquierda y
+     encoge el espacio de trabajo. Tiene controles nativos del <video> para
+     reproducir y avanzar. Solo en escritorio. */
+  #tutorialPanel {
+    position: absolute; top: 56px; left: 16px; z-index: 4;
+    width: 340px; max-width: calc(100vw - 32px);
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px;
+    display: none;
+  }
+  #tutorialPanel.open { display: block; }
+  .tut-head { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+  #btnTutClose { font-size: 12px; color: var(--text-dim); background: none; border: none; cursor: pointer; }
+  #btnTutClose:hover { color: var(--text); }
+  #tutVideo { width: 100%; display: block; border-radius: 6px; background: #000; }
+  .is-mobile #tutorialPanel { display: none !important; }
+
+  /* ---------- VENTANA DE AYUDA ----------
+     Se abre con el botón "?" del encabezado y solo cuando el usuario está en
+     el modo de dibujo (2D) o en la vista 3D. Repasa los atajos de mouse y
+     teclado sin depender de los globos de la visita. */
+  #helpModal {
+    position: fixed; inset: 0; z-index: 47;
+    background: var(--bg);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  #helpModal .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 26px; width: 420px; max-width: 100%;
+  }
+  #helpModal h2 { font-size: 15px; margin: 0 0 14px; }
+  .help-body { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+  .help-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; font-size: 12px; color: var(--text-dim); }
+  .help-kbd {
+    flex: none; background: rgba(255,255,255,0.06); border: 1px solid var(--line);
+    border-radius: 5px; padding: 4px 8px; font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 11px; color: var(--text); white-space: nowrap;
+  }
+
   /* ---------- GLOBOS DE AYUDA ----------
      Un letrero a la vez, anclado al control del que habla, y solo cuando ese
      control ya está en pantalla y no hay nada encima (prelude, términos o
@@ -338,8 +428,8 @@
     #topbar { padding: 10px 14px; }
     #topbar h1 { font-size: 13px; }
     #hint { display: none; }
-    #readout { top: 40px; left: 14px; font-size: 11px; max-width: calc(100% - 28px); }
-    #areaNotice { top: 76px; left: 14px; }
+    #readout { top: 92px; left: 14px; font-size: 11px; max-width: calc(100% - 28px); }
+    #areaNotice { top: 76px; left: 50%; }
     #stepper { gap: 14px; padding: 12px 0; }
     .step-label { font-size: 10px; }
     #tracePanel { top: auto; bottom: 150px; right: 12px; left: 12px; width: auto; }
@@ -433,49 +523,52 @@
   <canvas id="canvas" resize></canvas>
 
   <div id="topbar">
-    <h1>Topitos — dibuja tu figura</h1>
+    <div class="topbar-left">
+      <h1>Topitos — dibuja tu figura</h1>
+      <button id="langBtn" type="button" title="Idioma / Language">EN</button>
+    </div>
     <div class="topbar-right">
-      <div id="hint">rueda: zoom · clic derecho sostenido: paneo</div>
+      <div id="hint" data-i18n="hint">rueda: zoom · clic derecho sostenido: paneo</div>
       <button id="btnHelp" type="button" title="Ver las ayudas otra vez" aria-label="Ver las ayudas otra vez">?</button>
     </div>
   </div>
 
   <div id="mobileSteps" role="group" aria-label="Pasos">
-    <button type="button" class="mstep active" id="mstepImport">1 · Importar</button>
-    <button type="button" class="mstep" id="mstepScale">2 · Escalar</button>
-    <button type="button" class="mstep" id="mstepExtrude">3 · Ver en 3D</button>
+    <button type="button" class="mstep active" id="mstepImport"><span data-i18n="mstep-import">1 · Importar</span></button>
+    <button type="button" class="mstep" id="mstepScale"><span data-i18n="mstep-scale">2 · Escalar</span></button>
+    <button type="button" class="mstep" id="mstepExtrude"><span data-i18n="mstep-extrude">3 · Ver en 3D</span></button>
   </div>
 
   <div id="readout"></div>
-  <div id="areaNotice">Área máxima de trabajo: 10 × 10&nbsp;mm</div>
+  <div id="areaNotice"><span data-i18n="areaNotice">Área máxima de trabajo: 1 × 1&nbsp;Centímetros</span></div>
   <div id="warning"></div>
 
   <div id="tracePanel">
-    <h2>Imagen de calco</h2>
+    <h2 data-i18n="traceTitle">Imagen de calco</h2>
     <div class="ref-hint" id="traceHint">Arrastra la imagen para moverla. Ajústala y bloquéala para dibujar encima.</div>
 
-    <div class="slider-label"><span>Opacidad</span><span id="traceOpacityVal">35%</span></div>
+    <div class="slider-label"><span data-i18n="opacity">Opacidad</span><span id="traceOpacityVal">35%</span></div>
     <input id="traceOpacity" type="range" min="10" max="80" value="35">
 
-    <div class="slider-label"><span>Escala</span><span id="traceScaleVal">100%</span></div>
+    <div class="slider-label"><span data-i18n="scale">Escala</span><span id="traceScaleVal">100%</span></div>
     <input id="traceScale" type="range" min="20" max="400" value="100">
 
-    <div class="slider-label"><span>Rotación</span><span id="traceRotVal">0°</span></div>
+    <div class="slider-label"><span data-i18n="rotation">Rotación</span><span id="traceRotVal">0°</span></div>
     <input id="traceRot" type="range" min="-180" max="180" value="0">
 
     <div class="ref-row">
-      <button id="btnTraceLock" class="primary">Bloquear</button>
-      <button id="btnTraceRemove" class="danger">Quitar</button>
+      <button id="btnTraceLock" class="primary" data-i18n="lock">Bloquear</button>
+      <button id="btnTraceRemove" class="danger" data-i18n="remove">Quitar</button>
     </div>
   </div>
 
   <div id="mobileScalePanel">
-    <h2>Tamaño del motivo</h2>
-    <div class="slider-label"><span>Escala</span><span id="mobileScaleVal">100%</span></div>
+    <h2 data-i18n="mobileScaleTitle">Tamaño del motivo</h2>
+    <div class="slider-label"><span data-i18n="scale">Escala</span><span id="mobileScaleVal">100%</span></div>
     <input id="mobileScaleSlider" type="range" min="50" max="250" value="100">
     <div class="ref-row">
-      <button id="btnMobileBack" class="danger">‹ Otro motivo</button>
-      <button id="btnMobileAdvance" class="primary">Ver en 3D ›</button>
+      <button id="btnMobileBack" class="danger" data-i18n="backOther">‹ Otro motivo</button>
+      <button id="btnMobileAdvance" class="primary" data-i18n="view3d">Ver en 3D ›</button>
     </div>
   </div>
 
@@ -483,71 +576,105 @@
     <button id="drawPanelToggle" type="button" aria-label="Mostrar u ocultar controles">‹</button>
     <div id="drawPanel">
       <div class="block">
-        <h2>Escala</h2>
-        <div class="slider-label"><span>Escala</span><span id="desktopScaleVal">100%</span></div>
+        <h2 data-i18n="scaleTitle">Escala</h2>
+        <div class="slider-label"><span data-i18n="scale">Escala</span><span id="desktopScaleVal">100%</span></div>
         <input id="desktopScaleSlider" type="range" min="50" max="250" value="100">
       </div>
       <div class="block">
-        <h2>Controles</h2>
-        <button id="btnUndo" disabled title="Deshacer (Ctrl+Z)" aria-label="Deshacer"><span class="undo-icon">↶</span><span class="undo-label">Deshacer</span></button>
-        <button id="btnRedo" disabled title="Rehacer (Ctrl+Y)" aria-label="Rehacer"><span class="undo-icon">↷</span><span class="undo-label">Rehacer</span></button>
-        <button id="btnTrace">Calcar imagen</button>
-        <button id="btnSmooth" disabled>Suavizar trazo</button>
-        <button id="btnNodeEdit" disabled>Editar nodos</button>
-        <button id="btnMove" disabled>Mover diseño</button>
+        <h2 data-i18n="controls">Controles</h2>
+        <button id="btnUndo" disabled title="Deshacer (Ctrl+Z)" aria-label="Deshacer"><span class="undo-icon">↶</span><span class="undo-label" data-i18n="undo">Deshacer</span></button>
+        <button id="btnRedo" disabled title="Rehacer (Ctrl+Y)" aria-label="Rehacer"><span class="undo-icon">↷</span><span class="undo-label" data-i18n="redo">Rehacer</span></button>
+        <button id="btnTrace" data-i18n="traceBtn">Calcar imagen</button>
+        <button id="btnSmooth" disabled data-i18n="smoothBtn">Suavizar trazo</button>
+        <button id="btnNodeEdit" disabled data-i18n="nodeEditBtn">Editar dibujo</button>
+        <button id="btnMove" disabled data-i18n="moveBtn">Mover diseño</button>
+        <button id="btnTutorial" data-i18n="tutorialBtn">Ver tutorial</button>
       </div>
       <div class="block">
-        <button id="btnReset" class="danger" style="width:100%">Reiniciar</button>
-        <button id="btnAccept" class="primary" disabled style="width:100%;margin-top:6px">Aceptar diseño</button>
+        <button id="btnReset" class="danger" style="width:100%" data-i18n="resetBtn">Reiniciar</button>
+        <button id="btnAccept" class="primary" disabled style="width:100%;margin-top:6px" data-i18n="acceptBtn">Aceptar diseño</button>
       </div>
     </div>
   </div>
 
   <div id="stepper">
-    <button type="button" class="step active" id="stepImport"><div class="step-dot"></div><div class="step-label">1 · Importar</div></button>
-    <button type="button" class="step" id="stepDraw"><div class="step-dot"></div><div class="step-label">2 · Dibujar</div></button>
-    <button type="button" class="step" id="stepExtrude"><div class="step-dot"></div><div class="step-label">3 · Ver en 3D</div></button>
+    <button type="button" class="step active" id="stepImport"><div class="step-dot"></div><div class="step-label" data-i18n="stepImport">1 · Importar</div></button>
+    <button type="button" class="step" id="stepDraw"><div class="step-dot"></div><div class="step-label" data-i18n="stepDraw">2 · Dibujar</div></button>
+    <button type="button" class="step" id="stepExtrude"><div class="step-dot"></div><div class="step-label" data-i18n="stepExtrude">3 · Ver en 3D</div></button>
+  </div>
+
+  <div id="mouseHelp">
+    <div class="mh-item"><span class="mouse-ico" aria-hidden="true"></span><span data-i18n="mhDraw">Clic: dibujar</span></div>
+    <div class="mh-item"><span class="kbd-ico">R</span><span data-i18n="mhRight">Derecho + arrastrar: paneo</span></div>
+    <div class="mh-item"><span class="kbd-ico">W</span><span data-i18n="mhWheel">Rueda: zoom</span></div>
   </div>
 
   <div id="importScreen">
-    <div class="card">
-      <h2>¿Cómo quieres empezar?</h2>
-      <input type="file" id="fileInput" accept=".svg,.dxf,.pdf" hidden>
-      <div class="row">
-        <button id="btnUpload" class="primary">Subir archivo</button>
-        <button id="btnCatalog" class="primary">Elegir un motivo</button>
-        <button id="btnSkipImport" class="primary">Dibujar a mano</button>
+    <div class="import-split">
+      <div id="importVideoWrap">
+        <video id="importVideo" controls playsinline preload="metadata"></video>
       </div>
-      <div id="importStatus"></div>
+      <div class="card">
+        <h2 data-i18n="importTitle">Empieza el diseño de tus topitos seleccionando una de éstas opciones</h2>
+        <p id="importHint"></p>
+        <input type="file" id="fileInput" accept=".svg,.dxf,.pdf" hidden>
+        <div class="row">
+          <button id="btnUpload" class="primary" data-i18n="uploadBtn">Subir archivo</button>
+          <button id="btnCatalog" class="primary" data-i18n="catalogBtn">Elegir un motivo</button>
+          <button id="btnSkipImport" class="primary" data-i18n="skipImportBtn">Dibujar a mano</button>
+        </div>
+        <div id="importStatus"></div>
+      </div>
     </div>
   </div>
 
   <div id="catalogScreen">
     <div class="card">
-      <h2>Biblioteca de motivos</h2>
-      <p class="subtitle">Elige un motivo. Podrás editar sus nodos, suavizarlo o aceptarlo directamente.</p>
+      <h2 data-i18n="catalogTitle">Biblioteca de motivos</h2>
+      <p class="subtitle" data-i18n="catalogSubtitle">Elige un motivo. Podrás editar sus nodos, suavizarlo o aceptarlo directamente.</p>
       <input type="text" id="catalogSearch" placeholder="Buscar por etiqueta…">
       <div id="catalogGrid"></div>
       <div id="catalogStatus">Cargando motivos…</div>
-      <div class="row"><button id="btnCatalogClose">Cerrar</button></div>
+      <div class="row"><button id="btnCatalogClose" data-i18n="closeBtn">Cerrar</button></div>
     </div>
   </div>
 
   <div id="termsGate">
     <div class="card">
-      <h2>Antes de empezar</h2>
-      <p>Diseñar tus Topitos implica aceptar nuestras condiciones comerciales (tiempos de entrega, pagos y garantía).</p>
+      <h2 data-i18n="termsTitle">Antes de empezar</h2>
+      <p data-i18n="termsBody">Diseñar tus Topitos implica aceptar nuestras condiciones comerciales (tiempos de entrega, pagos y garantía).</p>
       <label>
         <input type="checkbox" id="termsCheckbox">
-        <span>He leído y acepto los <a href="https://www.evoquehaus.com/terminos-y-condiciones" target="_blank" rel="noopener">términos y condiciones</a>.</span>
+        <span data-i18n="termsCheck">He leído y acepto los <a href="https://www.evoquehaus.com/terminos-y-condiciones" target="_blank" rel="noopener">términos y condiciones</a>.</span>
       </label>
-      <div class="row"><button id="btnTermsAccept" class="primary" disabled style="width:100%;">Aceptar y continuar</button></div>
+      <div class="row"><button id="btnTermsAccept" class="primary" disabled style="width:100%;" data-i18n="termsAccept">Aceptar y continuar</button></div>
     </div>
   </div>
 
   <div id="loadingOverlay">
     <div class="spinner" id="loadingSpinner"></div>
     <div class="msg" id="loadingMsg">Cargando…</div>
+  </div>
+
+  <div id="helpModal">
+    <div class="card">
+      <h2 data-i18n="help">Ayuda</h2>
+      <div class="help-body">
+        <div class="help-row"><span class="help-kbd" data-i18n="helpWheel">Rueda del mouse</span><span data-i18n="helpWheelText">Acerca o aleja el zoom</span></div>
+        <div class="help-row"><span class="help-kbd" data-i18n="helpDrag">Clic + arrastrar</span><span data-i18n="helpDragText">Dibuja la figura o mueve el diseño</span></div>
+        <div class="help-row"><span class="help-kbd" data-i18n="helpRight">Clic derecho sostenido</span><span data-i18n="helpRightText">Panea sobre el lienzo</span></div>
+        <div class="help-row"><span class="help-kbd" data-i18n="helpUndoShort">Ctrl + Z</span><span data-i18n="helpUndoText">Deshacer</span></div>
+        <div class="help-row"><span class="help-kbd" data-i18n="helpRedoShort">Ctrl + Y</span><span data-i18n="helpRedoText">Rehacer</span></div>
+      </div>
+      <div class="row"><button id="btnHelpClose" class="primary" style="width:100%" data-i18n="helpClose">Cerrar</button></div>
+    </div>
+  </div>
+
+  <div id="tutorialPanel">
+    <div class="tut-head">
+      <button id="btnTutClose" type="button" aria-label="Cerrar tutorial" data-i18n="closeTut">✕ Cerrar</button>
+    </div>
+    <video id="tutVideo" controls playsinline preload="metadata"></video>
   </div>
 
   <div id="tourLayer"></div>
@@ -574,11 +701,269 @@ const MAX_ZOOM = 400;
    ruido de coma flotante del escalado. */
 const AREA_TOLERANCE_MM = 0.02;
 
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxQOfNhcBw8g1Hv7Sdh_JjNQgrLymY5zo4hSpFUiN09K36-UUh1_q1r3MaPWhWfhgPo/exec';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbyeFmWfHaxAlFcSrEE0dPK71eNbMomJ4KRtkFe-uRX0NruGBsSL8Sz2rQ-XGactrjYu/exec';
 const DESIGN_KEY = 'topitos-design';
 const TRACE_KEY = 'topitos-trace';
 const TERMS_KEY = 'topitos-terms-accepted';
+const LANG_KEY = 'topitos-lang';
 const $ = id => document.getElementById(id);
+
+/* ============================================================
+   IDIOMA — selector en la esquina superior izquierda y tablas de
+   traducción ES/EN. La interfaz base está escrita en español; al
+   cambiar de idioma se recorren los nodos marcados con
+   [data-i18n="clave"] y las cadenas dinámicas del JS usan t().
+   ============================================================ */
+const I18N = {
+  es: {
+    topTitle: 'Topitos — dibuja tu figura',
+    hint: 'rueda: zoom · clic derecho sostenido: paneo',
+    help: 'Ver las ayudas otra vez',
+    stepImport: '1 · Importar',
+    stepDraw: '2 · Dibujar',
+    stepExtrude: '3 · Ver en 3D',
+    mobileStepsLabel: 'Pasos',
+    'mstep-import': '1 · Importar',
+    'mstep-scale': '2 · Escalar',
+    'mstep-extrude': '3 · Ver en 3D',
+    areaNotice: 'Área máxima de trabajo: 1 × 1 Centímetros',
+    traceTitle: 'Imagen de calco',
+    traceHint: 'Arrastra la imagen para moverla. Ajústala y bloquéala para dibujar encima.',
+    traceHintLocked: 'Imagen bloqueada. Ya puedes dibujar encima; la opacidad sigue siendo ajustable.',
+    opacity: 'Opacidad',
+    scale: 'Escala',
+    rotation: 'Rotación',
+    lock: 'Bloquear',
+    unlock: 'Desbloquear',
+    remove: 'Quitar',
+    mobileScaleTitle: 'Tamaño del motivo',
+    backOther: '‹ Otro motivo',
+    view3d: 'Ver en 3D ›',
+    drawControlsHide: 'Mostrar u ocultar controles',
+    scaleTitle: 'Escala',
+    controls: 'Controles',
+    undo: 'Deshacer',
+    redo: 'Rehacer',
+    undoTitle: 'Deshacer (Ctrl+Z)',
+    redoTitle: 'Rehacer (Ctrl+Y)',
+    traceBtn: 'Calcar imagen',
+    smoothBtn: 'Suavizar trazo',
+    nodeEditBtn: 'Editar dibujo',
+    moveBtn: 'Mover diseño',
+    resetBtn: 'Reiniciar',
+    acceptBtn: 'Aceptar diseño',
+    importTitle: 'Empieza el diseño de tus topitos seleccionando una de éstas opciones',
+    uploadBtn: 'Subir archivo',
+    catalogBtn: 'Elegir un motivo',
+    skipImportBtn: 'Dibujar a mano',
+    catalogTitle: 'Biblioteca de motivos',
+    catalogSubtitle: 'Elige un motivo. Podrás editar sus nodos, suavizarlo o aceptarlo directamente.',
+    catalogSearchPlaceholder: 'Buscar por etiqueta…',
+    catalogLoading: 'Cargando motivos…',
+    closeBtn: 'Cerrar',
+    termsTitle: 'Antes de empezar',
+    termsBody: 'Diseñar tus Topitos implica aceptar nuestras condiciones comerciales (tiempos de entrega, pagos y garantía).',
+    termsCheck: 'He leído y acepto los {a}términos y condiciones{/a}.',
+    termsAccept: 'Aceptar y continuar',
+    loading: 'Cargando…',
+    tourClose: 'Cerrar',
+    tourNoMore: 'No mostrar más',
+    tourOk: 'Entendido',
+    flashClosed: 'Figura cerrada. Suaviza el trazo, edita nodos o acepta cuando esté lista.',
+    flashCloseBeforeAccept: 'Cierra el contorno antes de aceptar.',
+    flashSelfIntersect: 'La curva se cruza a sí misma — corrige la intersección antes de continuar.',
+    flashOutOfBounds: 'La figura se sale del área de 1 × 1 cm — reduce su tamaño para continuar.',
+    flashRestored: 'Diseño recuperado. Puedes seguir editándolo.',
+    flashTraceLoaded: 'Trazo cargado. Suavízalo, edita nodos o acepta el diseño.',
+    flashChooseMotif: 'Elige un motivo antes de continuar.',
+    flashCloseBefore3d: 'Cierra el contorno antes de pasar a la vista 3D.',
+    flashChooseFirst: 'Elige primero un motivo de la biblioteca.',
+    warnSelfIntersect: 'La curva se cruza a sí misma — corrige la intersección para continuar.',
+    warnOutOfBounds: 'La figura se sale del área de 1 × 1 cm — reduce el tamaño para continuar.',
+    importLoading: 'Cargando…',
+    importProcessing: 'Procesando archivo…',
+    importPdf: 'La importación de PDF todavía no está lista. Conviértelo a SVG, o usa la imagen como calco en el siguiente paso.',
+    importUnknown: 'Formato no reconocido — usa SVG o DXF.',
+    importReadFailed: 'No se pudo leer el archivo: ',
+    catalogStatusLoading: 'Cargando motivos…',
+    catalogStatusEmpty: 'Todavía no hay motivos en la biblioteca. Agrégalos en la hoja "SVG CATALOG".',
+    catalogStatusNoMatch: 'No hay motivos con esa etiqueta.',
+    catalogMotifLoading: 'Cargando motivo…',
+    catalogLoadFail: 'No se pudo cargar ese motivo: ',
+    motifPrefix: 'Motivo ',
+    importMobileHint: 'Si quieres calcar tu propia imagen o diseñar desde cero debes hacerlo desde un computador.',
+    tourCatalog: 'Busca por etiqueta y toca el motivo que quieras: se carga de una vez en el área de trabajo.',
+    tourStartMobile: 'Empieza aquí: elige un motivo de la biblioteca para tu Topito.',
+    tourSteps: 'Con estos tres botones te mueves entre importar el motivo, ajustar su tamaño y verlo en 3D.',
+    tourStart: 'Empieza aquí: sube tu archivo, elige un motivo de la biblioteca o dibuja tu figura a mano.',
+    tourScale: 'Ajusta el tamaño con esta barra. El cuadro de la pantalla es el área real de 1 × 1 cm: si la figura se sale, no podrás continuar.',
+    tourView3d: 'Cuando te guste, toca "Ver en 3D" para elegir el acabado y confirmar tu pedido.',
+    tourDraw: 'Cierra la figura volviendo al primer punto. Después puedes suavizar el trazo, editar nodos y aceptar el diseño.',
+    help: 'Ayuda',
+    helpWheel: 'Rueda del mouse',
+    helpWheelText: 'Acerca o aleja el zoom',
+    helpDrag: 'Clic + arrastrar',
+    helpDragText: 'Dibuja la figura o mueve el diseño',
+    helpRight: 'Clic derecho sostenido',
+    helpRightText: 'Panea sobre el lienzo',
+    helpUndoShort: 'Ctrl + Z',
+    helpUndoText: 'Deshacer',
+    helpRedoShort: 'Ctrl + Y',
+    helpRedoText: 'Rehacer',
+    helpClose: 'Cerrar',
+    mhDraw: 'Clic: dibujar',
+    mhRight: 'Derecho + arrastrar: paneo',
+    mhWheel: 'Rueda: zoom',
+    active: 'activo',
+    tutorialBtn: 'Ver tutorial',
+    closeTut: '✕ Cerrar',
+    tutNoVideo: 'Pronto verás un tutorial aquí.',
+    tutCloseBtn: 'Cerrar tutorial',
+  },
+  en: {
+    topTitle: 'Topitos — design your figure',
+    hint: 'wheel: zoom · hold right-click: pan',
+    help: 'See the help again',
+    stepImport: '1 · Import',
+    stepDraw: '2 · Draw',
+    stepExtrude: '3 · View in 3D',
+    mobileStepsLabel: 'Steps',
+    'mstep-import': '1 · Import',
+    'mstep-scale': '2 · Scale',
+    'mstep-extrude': '3 · View in 3D',
+    areaNotice: 'Maximum work area: 1 × 1 Centimeters',
+    traceTitle: 'Trace image',
+    traceHint: 'Drag the image to move it. Adjust it and lock it to draw on top.',
+    traceHintLocked: 'Image locked. You can now draw on top; opacity is still adjustable.',
+    opacity: 'Opacity',
+    scale: 'Scale',
+    rotation: 'Rotation',
+    lock: 'Lock',
+    unlock: 'Unlock',
+    remove: 'Remove',
+    mobileScaleTitle: 'Motif size',
+    backOther: '‹ Another motif',
+    view3d: 'View in 3D ›',
+    drawControlsHide: 'Show or hide controls',
+    scaleTitle: 'Scale',
+    controls: 'Controls',
+    undo: 'Undo',
+    redo: 'Redo',
+    undoTitle: 'Undo (Ctrl+Z)',
+    redoTitle: 'Redo (Ctrl+Y)',
+    traceBtn: 'Trace image',
+    smoothBtn: 'Smooth stroke',
+    nodeEditBtn: 'Edit drawing',
+    moveBtn: 'Move design',
+    resetBtn: 'Reset',
+    acceptBtn: 'Accept design',
+    importTitle: 'Start designing your topitos by selecting one of these options',
+    uploadBtn: 'Upload file',
+    catalogBtn: 'Choose a motif',
+    skipImportBtn: 'Draw by hand',
+    catalogTitle: 'Motif library',
+    catalogSubtitle: 'Choose a motif. You can edit its nodes, smooth it or accept it directly.',
+    catalogSearchPlaceholder: 'Search by tag…',
+    catalogLoading: 'Loading motifs…',
+    closeBtn: 'Close',
+    termsTitle: 'Before you start',
+    termsBody: 'Designing your Topitos means accepting our commercial conditions (delivery times, payments and warranty).',
+    termsCheck: 'I have read and accept the {a}terms and conditions{/a}.',
+    termsAccept: 'Accept and continue',
+    loading: 'Loading…',
+    tourClose: 'Close',
+    tourNoMore: 'Don\'t show again',
+    tourOk: 'Got it',
+    flashClosed: 'Figure closed. Smooth the stroke, edit nodes or accept when it is ready.',
+    flashCloseBeforeAccept: 'Close the outline before accepting.',
+    flashSelfIntersect: 'The curve crosses itself — fix the intersection before continuing.',
+    flashOutOfBounds: 'The figure goes outside the 1 × 1 cm area — reduce its size to continue.',
+    flashRestored: 'Design recovered. You can keep editing it.',
+    flashTraceLoaded: 'Stroke loaded. Smooth it, edit nodes or accept the design.',
+    flashChooseMotif: 'Choose a motif before continuing.',
+    flashCloseBefore3d: 'Close the outline before going to the 3D view.',
+    flashChooseFirst: 'Choose a motif from the library first.',
+    warnSelfIntersect: 'The curve crosses itself — fix the intersection to continue.',
+    warnOutOfBounds: 'The figure goes outside the 1 × 1 cm area — reduce its size to continue.',
+    importLoading: 'Loading…',
+    importProcessing: 'Processing file…',
+    importPdf: 'PDF import is not ready yet. Convert it to SVG, or use the image as a trace in the next step.',
+    importUnknown: 'Unrecognized format — use SVG or DXF.',
+    importReadFailed: 'Could not read the file: ',
+    catalogStatusLoading: 'Loading motifs…',
+    catalogStatusEmpty: 'There are no motifs in the library yet. Add them in the "SVG CATALOG" sheet.',
+    catalogStatusNoMatch: 'There are no motifs with that tag.',
+    catalogMotifLoading: 'Loading motif…',
+    catalogLoadFail: 'Could not load that motif: ',
+    motifPrefix: 'Motif ',
+    importMobileHint: 'If you want to trace your own image or design from scratch you must do it from a computer.',
+    tourCatalog: 'Search by tag and tap the motif you want: it loads right into the work area.',
+    tourStartMobile: 'Start here: choose a motif from the library for your Topito.',
+    tourSteps: 'These three buttons move you between importing the motif, adjusting its size and viewing it in 3D.',
+    tourStart: 'Start here: upload your file, choose a motif from the library or draw your figure by hand.',
+    tourScale: 'Adjust the size with this bar. The box on screen is the real 1 × 1 cm area: if the figure goes out, you cannot continue.',
+    tourView3d: 'When you like it, tap "View in 3D" to choose the finish and confirm your order.',
+    tourDraw: 'Close the figure by returning to the first point. Then you can smooth the stroke, edit nodes and accept the design.',
+    help: 'Help',
+    helpWheel: 'Mouse wheel',
+    helpWheelText: 'Zoom in or out',
+    helpDrag: 'Click + drag',
+    helpDragText: 'Draw the figure or move the design',
+    helpRight: 'Hold right-click',
+    helpRightText: 'Pan across the canvas',
+    helpUndoShort: 'Ctrl + Z',
+    helpUndoText: 'Undo',
+    helpRedoShort: 'Ctrl + Y',
+    helpRedoText: 'Redo',
+    helpClose: 'Close',
+    mhDraw: 'Click: draw',
+    mhRight: 'Right + drag: pan',
+    mhWheel: 'Wheel: zoom',
+    active: 'active',
+    tutorialBtn: 'Watch tutorial',
+    closeTut: '✕ Close',
+    tutNoVideo: 'A tutorial will be available here soon.',
+    tutCloseBtn: 'Close tutorial',
+  },
+};
+
+let currentLang = 'es';
+try { currentLang = sessionStorage.getItem(LANG_KEY) || 'es'; } catch (e) {}
+if (I18N[currentLang] === undefined) currentLang = 'es';
+
+function t(key) {
+  const table = I18N[currentLang] || I18N.es;
+  return table[key] !== undefined ? table[key] : (I18N.es[key] !== undefined ? I18N.es[key] : key);
+}
+
+function applyLanguage() {
+  const table = I18N[currentLang] || I18N.es;
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    const val = table[el.getAttribute('data-i18n')];
+    if (val !== undefined) {
+      const anchor = el.querySelector('a');
+      if (anchor && val.indexOf('{a}') !== -1) {
+        el.innerHTML = val.replace('{a}', '<a href="https://www.evoquehaus.com/terminos-y-condiciones" target="_blank" rel="noopener">').replace('{/a}', '</a>');
+      } else {
+        el.textContent = val;
+      }
+    }
+  });
+  const langBtn = $('langBtn');
+  if (langBtn) langBtn.textContent = currentLang === 'es' ? 'EN' : 'ES';
+  const h1 = document.querySelector('#topbar h1');
+  if (h1 && !h1.closest('[data-i18n]')) h1.textContent = table.topTitle;
+  const importHint = $('importHint');
+  if (importHint && isMobile) importHint.textContent = table.importMobileHint;
+}
+
+function setLanguage(lang) {
+  if (!I18N[lang]) return;
+  currentLang = lang;
+  try { sessionStorage.setItem(LANG_KEY, lang); } catch (e) {}
+  document.documentElement.lang = lang;
+  applyLanguage();
+}
 
 /* Un solo punto de verdad para "es móvil", y es el mismo que decidió la clase
    .is-mobile del <html> antes de pintar: así el layout y el comportamiento
@@ -733,9 +1118,11 @@ function renderTip(id, text, target) {
     '<button class="tour-close" type="button" aria-label="Cerrar">✕</button>' +
     '<p></p>' +
     '<div class="tour-row">' +
-      '<button class="tour-skip" type="button">No mostrar más</button>' +
-      '<button class="tour-ok primary" type="button">Entendido</button>' +
+      '<button class="tour-skip" type="button"></button>' +
+      '<button class="tour-ok primary" type="button"></button>' +
     '</div>';
+  tip.querySelector('.tour-skip').textContent = t('tourNoMore');
+  tip.querySelector('.tour-ok').textContent = t('tourOk');
   tip.querySelector('p').textContent = text;
   $('tourLayer').appendChild(tip);
 
@@ -783,7 +1170,7 @@ function tipsForStage() {
   if (catalogEl.style.display === 'flex') {
     queueTips([{
       id: 'catalogo',
-      text: 'Busca por etiqueta y toca el motivo que quieras: se carga de una vez en el área de trabajo.',
+      text: t('tourCatalog'),
       target: () => $('catalogSearch'),
     }]);
     return;
@@ -792,12 +1179,12 @@ function tipsForStage() {
   if (importEl.style.display !== 'none') {
     if (isMobile) {
       queueTips([
-        { id: 'inicio', text: 'Empieza aquí: elige un motivo de la biblioteca para tu Topito.', target: () => $('btnCatalog') },
-        { id: 'pasos', text: 'Con estos tres botones te mueves entre importar el motivo, ajustar su tamaño y verlo en 3D.', target: () => $('mobileSteps') },
+        { id: 'inicio', text: t('tourStartMobile'), target: () => $('btnCatalog') },
+        { id: 'pasos', text: t('tourSteps'), target: () => $('mobileSteps') },
       ]);
     } else {
       queueTips([
-        { id: 'inicio', text: 'Empieza aquí: sube tu archivo, elige un motivo de la biblioteca o dibuja tu figura a mano.', target: () => $('btnCatalog') },
+        { id: 'inicio', text: t('tourStart'), target: () => $('btnCatalog') },
       ]);
     }
     return;
@@ -807,19 +1194,19 @@ function tipsForStage() {
     queueTips([
       {
         id: 'escala',
-        text: 'Ajusta el tamaño con esta barra. El cuadro de la pantalla es el área real de 10 × 10 mm: si la figura se sale, no podrás continuar.',
+        text: t('tourScale'),
         target: () => (mobileScalePanel.style.display === 'none' ? null : mobileScaleSlider),
       },
       {
         id: 'ver3d',
-        text: 'Cuando te guste, toca "Ver en 3D" para elegir el acabado y confirmar tu pedido.',
+        text: t('tourView3d'),
         target: () => $('btnMobileAdvance'),
       },
     ]);
   } else {
     queueTips([{
       id: 'dibujo',
-      text: 'Cierra la figura volviendo al primer punto. Después puedes suavizar el trazo, editar nodos y aceptar el diseño.',
+      text: t('tourDraw'),
       target: () => $('drawPanel'),
     }]);
   }
@@ -839,13 +1226,40 @@ function refreshTipsForStage(delay) {
   pumpTimer = setTimeout(tipsForStage, delay || 300);
 }
 
+/* La ayuda del "?" solo aplica en el modo de dibujo (2D) — en la pantalla de
+   inicio y en la biblioteca no hay atajos que explicar. */
+function inDrawMode() {
+  return importScreen.style.display === 'none' && catalogScreen.style.display !== 'flex';
+}
+function updateHelpButton() {
+  $('btnHelp').style.display = inDrawMode() ? '' : 'none';
+}
+function openHelpModal() {
+  if (!inDrawMode()) return;
+  $('helpModal').style.display = 'flex';
+}
+function closeHelpModal() {
+  $('helpModal').style.display = 'none';
+}
+
 $('btnHelp').addEventListener('click', () => {
+  if (inDrawMode()) { openHelpModal(); return; }
   tourSeen.clear();
   saveTourSeen();
   tourOff = false;
   try { sessionStorage.removeItem(TOUR_OFF_KEY); } catch (e) {}
   refreshTipsForStage(60);
 });
+$('btnHelpClose').addEventListener('click', closeHelpModal);
+$('helpModal').addEventListener('click', (e) => { if (e.target === $('helpModal')) closeHelpModal(); });
+
+/* Selector de idioma, arriba a la izquierda: alterna ES/EN y refresca toda
+   la interfaz (nodos [data-i18n] y mensajes dinámicos vía t()). */
+$('langBtn').addEventListener('click', () => {
+  setLanguage(currentLang === 'es' ? 'en' : 'es');
+  if (termsDone) refreshTipsForStage(60);
+});
+setLanguage(currentLang);
 
 /* ============================================================
    TÉRMINOS Y CONDICIONES — compuerta antes de tocar el editor.
@@ -1031,14 +1445,14 @@ function updateUIAfterStateChange() {
       moveMode = false;
       moveDragActive = false;
       btnMove.classList.remove('active');
-      btnMove.textContent = 'Mover diseño';
+      btnMove.textContent = t('moveBtn');
       canvasEl.style.cursor = 'crosshair';
     }
   }
   if (!hasClosed) {
     nodeEditMode = false;
     btnNodeEdit.classList.remove('active');
-    btnNodeEdit.textContent = 'Editar nodos';
+    btnNodeEdit.textContent = t('nodeEditBtn');
   }
   if (outerPath) outerPath.fullySelected = nodeEditMode;
   revalidateBridge();
@@ -1195,7 +1609,7 @@ tool.onMouseUp = () => {
 tool.onMouseMove = (event) => {
   if (isMobile) return;   // en celular el readout se reserva para los avisos
   const p = event.point;
-  readout.textContent = `x: ${p.x.toFixed(2)}mm   y: ${p.y.toFixed(2)}mm   zoom: ${paper.view.zoom.toFixed(0)}x`;
+  readout.textContent = `x: ${(p.x / 10).toFixed(2)}cm   y: ${(p.y / 10).toFixed(2)}cm   zoom: ${paper.view.zoom.toFixed(0)}x`;
 };
 
 function applyZoom(newZoomRaw, focusPoint) {
@@ -1273,7 +1687,7 @@ canvasEl.addEventListener('touchcancel', () => { multiTouch = false; pinchStart 
    lo da siempre el botón "Aceptar diseño". */
 function closeActivePath() {
   outerPath.closed = true;
-  enterReviewOuter('Figura cerrada. Suaviza el trazo, edita nodos o acepta cuando esté lista.');
+  enterReviewOuter(t('flashClosed'));
 }
 
 function enterReviewOuter(message) {
@@ -1353,10 +1767,10 @@ function revalidateBridge() {
   noSelfIntersection = !(outerPath && outerPath.closed && hasSelfIntersection(outerPath));
 
   if (!noSelfIntersection) {
-    warning.textContent = 'La curva se cruza a sí misma — corrige la intersección para continuar.';
+    warning.textContent = t('warnSelfIntersect');
     warning.style.display = 'block';
   } else if (!insideOk) {
-    warning.textContent = 'La figura se sale del área de 10 × 10 mm — reduce el tamaño para continuar.';
+    warning.textContent = t('warnOutOfBounds');
     warning.style.display = 'block';
   } else {
     warning.style.display = 'none';
@@ -1379,18 +1793,18 @@ btnSmooth.addEventListener('click', () => {
 
 btnNodeEdit.addEventListener('click', () => {
   nodeEditMode = !nodeEditMode;
-  if (nodeEditMode) { moveMode = false; btnMove.classList.remove('active'); btnMove.textContent = 'Mover diseño'; canvasEl.style.cursor = 'crosshair'; }
+  if (nodeEditMode) { moveMode = false; btnMove.classList.remove('active'); btnMove.textContent = t('moveBtn'); canvasEl.style.cursor = 'crosshair'; }
   btnNodeEdit.classList.toggle('active', nodeEditMode);
-  btnNodeEdit.textContent = nodeEditMode ? 'Editar nodos (activo)' : 'Editar nodos';
+  btnNodeEdit.textContent = nodeEditMode ? t('nodeEditBtn') + ' (' + t('active') + ')' : t('nodeEditBtn');
   canvasEl.style.cursor = nodeEditMode ? 'default' : 'crosshair';
   if (outerPath) outerPath.fullySelected = nodeEditMode;
 });
 
 btnMove.addEventListener('click', () => {
   moveMode = !moveMode;
-  if (moveMode) { nodeEditMode = false; btnNodeEdit.classList.remove('active'); btnNodeEdit.textContent = 'Editar nodos'; if (outerPath) outerPath.fullySelected = false; }
+  if (moveMode) { nodeEditMode = false; btnNodeEdit.classList.remove('active'); btnNodeEdit.textContent = t('nodeEditBtn'); if (outerPath) outerPath.fullySelected = false; }
   btnMove.classList.toggle('active', moveMode);
-  btnMove.textContent = moveMode ? 'Mover diseño (activo)' : 'Mover diseño';
+  btnMove.textContent = moveMode ? t('moveBtn') + ' (' + t('active') + ')' : t('moveBtn');
   canvasEl.style.cursor = moveMode ? 'grab' : 'crosshair';
 });
 
@@ -1404,16 +1818,20 @@ function resetAll() {
   nodeEditMode = false;
   btnNodeEdit.disabled = true;
   btnNodeEdit.classList.remove('active');
-  btnNodeEdit.textContent = 'Editar nodos';
+  btnNodeEdit.textContent = t('nodeEditBtn');
   moveMode = false;
   moveDragActive = false;
   btnMove.disabled = true;
   btnMove.classList.remove('active');
-  btnMove.textContent = 'Mover diseño';
+  btnMove.textContent = t('moveBtn');
   canvasEl.style.cursor = isMobile ? 'grab' : 'crosshair';
   undoStack.length = 0;
   redoStack.length = 0;
   updateUndoRedoButtons();
+  if (traceRaster) traceRaster.remove();
+  traceRaster = null; traceSrc = null; traceLocked = false;
+  tracePanel.style.display = 'none';
+  try { sessionStorage.removeItem(TRACE_KEY); } catch (e) {}
   try { sessionStorage.removeItem(DESIGN_KEY); } catch (e) {}
   if (isMobile) mobileScalePanel.style.display = 'none';
   revalidateBridge();
@@ -1437,7 +1855,7 @@ traceInput.addEventListener('change', (event) => {
     traceLocked = false;
     createTraceRaster(dataUrl);
     syncTraceControls();
-  }).catch((err) => flash('No se pudo cargar la imagen: ' + err.message));
+  }).catch((err) => flash(t('importReadFailed') + err.message));
   traceInput.value = '';
 });
 
@@ -1492,14 +1910,14 @@ function syncTraceControls() {
   $('traceRot').value = Math.round(traceState.rotation);
   $('traceRotVal').textContent = Math.round(traceState.rotation) + '°';
   ['traceScale', 'traceRot'].forEach(id => { $(id).disabled = traceLocked; });
-  $('btnTraceLock').textContent = traceLocked ? 'Desbloquear' : 'Bloquear';
+  $('btnTraceLock').textContent = traceLocked ? t('unlock') : t('lock');
   updateTraceHint();
 }
 
 function updateTraceHint() {
   $('traceHint').textContent = traceLocked
-    ? 'Imagen bloqueada. Ya puedes dibujar encima; la opacidad sigue siendo ajustable.'
-    : 'Arrastra la imagen para moverla. Ajústala y bloquéala para dibujar encima.';
+    ? t('traceHintLocked')
+    : t('traceHint');
   canvasEl.style.cursor = isMobile ? 'grab' : (traceIsEditable() ? 'move' : (nodeEditMode ? 'default' : 'crosshair'));
 }
 
@@ -1539,6 +1957,7 @@ $('btnTraceRemove').addEventListener('click', () => {
    Hoja "SVG CATALOG": A2:A url del SVG, B2:B url de la previsualización.
    ============================================================ */
 let catalogItems = [];
+let tutorialData = {};
 let configPromise = null;
 
 function loadConfig() {
@@ -1573,6 +1992,7 @@ async function applyConfig() {
   if (Array.isArray(data.catalog)) {
     catalogItems = data.catalog.filter(it => it && it.svg);
   }
+  if (data && data.tutorial) tutorialData = data.tutorial;
   return data;
 }
 
@@ -1655,10 +2075,10 @@ function deserializePath(data) {
 }
 
 function acceptDesign() {
-  if (!outerPath || !outerPath.closed) { flash('Cierra el contorno antes de aceptar.'); return; }
+  if (!outerPath || !outerPath.closed) { flash(t('flashCloseBeforeAccept')); return; }
   revalidateBridge();
-  if (!noSelfIntersection) { flash('La curva se cruza a sí misma — corrige la intersección antes de continuar.'); return; }
-  if (!insideOk) { flash('La figura se sale del área de 10 × 10 mm — reduce su tamaño para continuar.'); return; }
+  if (!noSelfIntersection) { flash(t('flashSelfIntersect')); return; }
+  if (!insideOk) { flash(t('flashOutOfBounds')); return; }
 
   const totalLengthMm = outerPath.length;
   const payload = {
@@ -1696,7 +2116,7 @@ function restoreSession() {
     if (data && data.editor && data.editor.outer) {
       drawLayer.activate();
       outerPath = deserializePath(data.editor.outer);
-      enterReviewOuter('Diseño recuperado. Puedes seguir editándolo.');
+      enterReviewOuter(t('flashRestored'));
       restored = true;
     }
   } catch (err) {
@@ -1742,9 +2162,12 @@ const stepExtrude = $('stepExtrude');
 
 function closeImportScreen() {
   importScreen.style.display = 'none';
+  const impVid = $('importVideo');
+  if (impVid) impVid.pause();
   stepImport.classList.remove('active');
   stepDraw.classList.add('active');
   syncMobileSteps();
+  updateHelpButton();
   refreshTipsForStage(450);
 }
 
@@ -1755,9 +2178,16 @@ function closeImportScreen() {
 function openImportScreen() {
   catalogScreen.style.display = 'none';
   importScreen.style.display = 'flex';
+  const src = (tutorialData && tutorialData.inicio) || '';
+  const impVid = $('importVideo');
+  if (impVid) {
+    if (impVid.getAttribute('src') !== src) impVid.src = src;
+    if (src) impVid.play().catch(() => {});
+  }
   stepImport.classList.add('active');
   stepDraw.classList.remove('active');
   syncMobileSteps();
+  updateHelpButton();
   refreshTipsForStage(350);
 }
 
@@ -1773,8 +2203,8 @@ fileInput.addEventListener('change', async (event) => {
   const file = event.target.files[0];
   if (!file) return;
   const ext = file.name.split('.').pop().toLowerCase();
-  setImportStatus('Cargando…', false);
-  showLoading('Procesando archivo…');
+  setImportStatus(t('importLoading'), false);
+  showLoading(t('importProcessing'));
 
   try {
     if (ext === 'svg') {
@@ -1782,16 +2212,16 @@ fileInput.addEventListener('change', async (event) => {
     } else if (ext === 'dxf') {
       await importDXFDesign(await file.text());
     } else if (ext === 'pdf') {
-      setImportStatus('La importación de PDF todavía no está lista. Conviértelo a SVG, o usa la imagen como calco en el siguiente paso.', true);
+      setImportStatus(t('importPdf'), true);
       return;
     } else {
-      setImportStatus('Formato no reconocido — usa SVG o DXF.', true);
+      setImportStatus(t('importUnknown'), true);
       return;
     }
     closeImportScreen();
   } catch (err) {
     console.error(err);
-    setImportStatus('No se pudo leer el archivo: ' + err.message, true);
+    setImportStatus(t('importReadFailed') + err.message, true);
   } finally {
     hideLoading();
     fileInput.value = '';
@@ -1857,7 +2287,7 @@ function adoptImportedItem(item) {
   if (!outer) throw new Error('el trazo no es utilizable');
   outerPath = styleAsOuter(outer);
   outerPath.closed = true;
-  enterReviewOuter('Trazo cargado. Suavízalo, edita nodos o acepta el diseño.');
+  enterReviewOuter(t('flashTraceLoaded'));
   if (isMobile) {
     mobileScaleFactor = 1;
     mobileScaleSlider.value = 100;
@@ -1946,8 +2376,9 @@ $('btnCatalogClose').addEventListener('click', () => {
 async function openCatalog() {
   catalogScreen.style.display = 'flex';
   syncMobileSteps();
+  updateHelpButton();
   if (!catalogItems.length) {
-    setCatalogStatus('Cargando motivos…', false);
+    setCatalogStatus(t('catalogStatusLoading'), false);
     showLoading('Cargando biblioteca de motivos…');
     await applyConfig();
     hideLoading();
@@ -1964,7 +2395,7 @@ $('catalogSearch').addEventListener('input', (e) => renderCatalog(e.target.value
 function renderCatalog(query) {
   catalogGrid.innerHTML = '';
   if (!catalogItems.length) {
-    setCatalogStatus('Todavía no hay motivos en la biblioteca. Agrégalos en la hoja "SVG CATALOG".', false);
+    setCatalogStatus(t('catalogStatusEmpty'), false);
     return;
   }
   const q = (query || '').trim().toLowerCase();
@@ -1973,7 +2404,7 @@ function renderCatalog(query) {
     : catalogItems;
 
   if (!items.length) {
-    setCatalogStatus('No hay motivos con esa etiqueta.', false);
+    setCatalogStatus(t('catalogStatusNoMatch'), false);
     return;
   }
   setCatalogStatus('', false);
@@ -1981,10 +2412,10 @@ function renderCatalog(query) {
     const btn = document.createElement('button');
     btn.className = 'motif';
     btn.type = 'button';
-    btn.title = 'Motivo ' + (i + 1);
+    btn.title = t('motifPrefix') + (i + 1);
     const img = document.createElement('img');
     img.loading = 'lazy';
-    img.alt = 'Motivo ' + (i + 1);
+    img.alt = t('motifPrefix') + (i + 1);
     img.src = normalizeImageUrl(item.preview || item.svg);
     btn.appendChild(img);
     btn.addEventListener('click', () => chooseMotif(item, i));
@@ -2019,8 +2450,8 @@ async function fetchMotifSVG(url) {
 }
 
 async function chooseMotif(item, i) {
-  setCatalogStatus('Cargando motivo…', false);
-  showLoading('Cargando motivo…');
+  setCatalogStatus(t('catalogMotifLoading'), false);
+  showLoading(t('catalogMotifLoading'));
   try {
     const svgText = await fetchMotifSVG(item.svg);
     importSVGDesign(svgText);
@@ -2028,7 +2459,7 @@ async function chooseMotif(item, i) {
     closeImportScreen();   // deja la ayuda del paso de escalar en cola
   } catch (err) {
     console.error(err);
-    setCatalogStatus('No se pudo cargar ese motivo: ' + err.message, true);
+    setCatalogStatus(t('catalogLoadFail') + err.message, true);
   } finally {
     hideLoading();
   }
@@ -2042,10 +2473,10 @@ async function chooseMotif(item, i) {
 if (isMobile) {
   $('btnUpload').style.display = 'none';
   $('btnSkipImport').style.display = 'none';
-  const importP = document.querySelector('#importScreen p');
-  if (importP) importP.textContent = 'Elige un motivo de la biblioteca. Desde el celular solo ajustas su tamaño — para subir tu propio archivo o dibujar a mano, entra desde un computador.';
+  const importHint = $('importHint');
+  if (importHint) importHint.textContent = t('importMobileHint');
 
-  [btnTrace, btnSmooth, btnNodeEdit, $('btnUndo'), $('btnRedo'), btnMove].forEach((b) => { b.style.display = 'none'; });
+  [btnTrace, btnSmooth, btnNodeEdit, $('btnUndo'), $('btnRedo'), btnMove, $('btnTutorial')].forEach((b) => { b.style.display = 'none'; });
   canvasEl.style.cursor = 'grab';
 }
 
@@ -2098,7 +2529,7 @@ $('btnMobileBack').addEventListener('click', () => {
 
 /* Avanzar: mismo criterio de validación que el paso 3. */
 $('btnMobileAdvance').addEventListener('click', () => {
-  if (!outerPath || !outerPath.closed) { flash('Elige un motivo antes de continuar.'); return; }
+  if (!outerPath || !outerPath.closed) { flash(t('flashChooseMotif')); return; }
   acceptDesign();
 });
 
@@ -2115,6 +2546,34 @@ if (!isMobile && window.matchMedia('(max-width: 720px)').matches) {
   drawPanelToggle.textContent = '›';
 }
 
+/* ---------- Tutorial en 2D ----------
+   "Ver tutorial" abre un video a la izquierda (Tutorial!B2) que encoge el
+   espacio de trabajo. Cerrarlo vuelve a dejar el lienzo libre. */
+const tutorialPanel = $('tutorialPanel');
+const tutVideo = $('tutVideo');
+const btnTutorial = $('btnTutorial');
+const tutVideoSrc = () => (tutorialData && tutorialData.dibujo) || '';
+let tutorialOpen = false;
+
+function openTutorial() {
+  if (!tutVideoSrc()) { flash(t('tutNoVideo')); return; }
+  if (tutVideo.getAttribute('src') !== tutVideoSrc()) tutVideo.src = tutVideoSrc();
+  tutorialPanel.classList.add('open');
+  tutorialOpen = true;
+  btnTutorial.textContent = t('tutCloseBtn');
+  tutVideo.play().catch(() => {});
+  closeTip();
+  clearTipQueue();
+}
+function closeTutorial() {
+  tutorialPanel.classList.remove('open');
+  tutorialOpen = false;
+  tutVideo.pause();
+  btnTutorial.textContent = t('tutorialBtn');
+}
+$('btnTutorial').addEventListener('click', () => { tutorialOpen ? closeTutorial() : openTutorial(); });
+$('btnTutClose').addEventListener('click', closeTutorial);
+
 /* ---------- Stepper de escritorio — volver a un paso anterior ---------- */
 stepImport.addEventListener('click', () => {
   if (importScreen.style.display !== 'none') return; // ya está abierto
@@ -2126,7 +2585,7 @@ stepDraw.addEventListener('click', () => {
   closeImportScreen();
 });
 stepExtrude.addEventListener('click', () => {
-  if (!outerPath || !outerPath.closed) { flash('Cierra el contorno antes de pasar a la vista 3D.'); return; }
+  if (!outerPath || !outerPath.closed) { flash(t('flashCloseBefore3d')); return; }
   acceptDesign();
 });
 
@@ -2156,7 +2615,7 @@ mstepImport.addEventListener('click', () => {
 
 mstepScale.addEventListener('click', () => {
   if (!outerPath) {
-    flash('Elige primero un motivo de la biblioteca.');
+    flash(t('flashChooseFirst'));
     openCatalog();
     return;
   }
@@ -2167,7 +2626,7 @@ mstepScale.addEventListener('click', () => {
 
 mstepExtrude.addEventListener('click', () => {
   if (!outerPath || !outerPath.closed) {
-    flash('Elige un motivo antes de pasar a la vista 3D.');
+    flash(t('flashChooseMotif'));
     openCatalog();
     return;
   }
@@ -2180,6 +2639,7 @@ mstepExtrude.addEventListener('click', () => {
 if (restoreSession()) closeImportScreen();
 revalidateBridge();
 syncMobileSteps();
+updateHelpButton();
 </script>
 </body>
 </html>
