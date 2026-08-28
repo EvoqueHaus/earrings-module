@@ -447,7 +447,7 @@
         <h2>Vástago <span class="sublabel">tipo de poste</span></h2>
         <div id="stemOptions" role="group" aria-label="Tipo de vástago"></div>
         <div id="stemStatus" role="status"></div>
-        <button id="btnStemToggle" class="panel-btn" type="button">Mover Vástago</button>
+        <button id="btnStemToggle" class="panel-btn" type="button">Mover el palito</button>
         <button id="btnTutorial3d" class="panel-btn" type="button">Ver tutorial</button>
       </div>
 
@@ -600,7 +600,7 @@ const I18N_3D = {
   btnFlip: { es: 'Voltear un lado', en: 'Flip one side' },
   blockStem: { es: 'Vástago', en: 'Stem' },
   stemSublabel: { es: 'tipo de poste', en: 'post type' },
-  btnStemToggle: { es: 'Mover Vástago', en: 'Move Stem' },
+  btnStemToggle: { es: 'Mover el palito', en: 'Move the stem' },
   btnTutorial3d: { es: 'Ver tutorial', en: 'Watch tutorial' },
   blockPrice: { es: 'Valor estimado', en: 'Estimated value' },
   btnConfirm: { es: 'Confirmar pedido', en: 'Confirm order' },
@@ -1167,13 +1167,13 @@ addDimensionLine(
   dimGroup,
   new THREE.Vector3(-halfX, -halfY - dimMargin, halfZ),
   new THREE.Vector3(halfX, -halfY - dimMargin, halfZ),
-  pieceSize.x.toFixed(1) + 'mm'
+  (pieceSize.x / 10).toFixed(1) + 'cm'
 );
 addDimensionLine(
   dimGroup,
   new THREE.Vector3(-halfX - dimMargin, -halfY, halfZ),
   new THREE.Vector3(-halfX - dimMargin, halfY, halfZ),
-  pieceSize.y.toFixed(1) + 'mm'
+  (pieceSize.y / 10).toFixed(1) + 'cm'
 );
 A.pieceHolder.add(dimGroup);
 
@@ -1266,7 +1266,7 @@ controls.addEventListener('start', () => { lastAzimuth = cameraAzimuth(); });
 controls.addEventListener('end', () => {
   const diff = cameraAzimuth() - lastAzimuth;
   if (Math.abs(diff) > 0.0006) {
-    orbitDir = diff < 0 ? -1 : 1;
+    orbitDir = diff < 0 ? 1 : -1;
     controls.autoRotateSpeed = 2.0 * orbitDir;
   }
 });
@@ -1515,6 +1515,12 @@ btnStemToggle.addEventListener('click', () => {
   gumball.visible = active;
   gumball.enabled = active;
   btnStemToggle.classList.toggle('active', active);
+  if (active) {
+    controls.autoRotate = false;
+    controls.update();
+  } else {
+    controls.autoRotate = true;
+  }
 });
 
 /* ---------- Voltear un lado del arete ---------- */
