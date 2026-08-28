@@ -55,6 +55,14 @@
     background: linear-gradient(to bottom, rgba(28,28,30,0.9), transparent);
   }
   #topbar h1 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
+  .topbar-left { display: flex; align-items: center; gap: 10px; }
+  #langBtn {
+    width: 34px; height: 26px; flex: none; padding: 0; border-radius: 7px;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.04);
+    color: var(--text); font-family: inherit; font-size: 11px; font-weight: 600; line-height: 1;
+    cursor: pointer; letter-spacing: 0.04em;
+  }
+  #langBtn:hover { color: var(--text); border-color: var(--accent); background: rgba(255,255,255,0.08); }
   #topbar a { color: var(--text-dim); font-size: 12px; text-decoration: none; white-space: nowrap; }
   #topbar a:hover { color: var(--text); }
   .topbar-right { display: flex; align-items: center; gap: 10px; }
@@ -255,6 +263,34 @@
   }
   #btnQrDownload:hover { background: rgba(255,255,255,0.1); }
 
+  #ofCountryCode option { background: #1c1c1e; color: #f5f5f5; }
+
+  /* ---------- TUTORIAL 3D (video) ---------- */
+  #tutorialPanel3d {
+    position: absolute; z-index: 45; top: 80px; left: 20px;
+    width: 300px; display: none;
+    background: rgba(28,28,30,0.97); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+  }
+  #tutorialPanel3d.open { display: block; }
+  #tutVideo3d { width: 100%; display: block; border-radius: 6px; background: #000; }
+  .tut-head { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+  #btnTut3dClose {
+    font-family: inherit; font-size: 12px; padding: 6px 10px; border-radius: 7px;
+    border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer;
+  }
+  #btnTut3dClose:hover { border-color: var(--accent); color: var(--text); }
+  .is-mobile #tutorialPanel3d { display: none !important; }
+
+  /* ---------- DESCARGAR IMAGEN (solo celular) ---------- */
+  #btnDownloadImage {
+    position: absolute; z-index: 40; right: 16px; bottom: 96px;
+    font-family: inherit; font-size: 12px; padding: 10px 16px; border-radius: 8px;
+    border: 1px solid var(--accent); background: var(--accent); color: #1c1c1e;
+    font-weight: 600; cursor: pointer;
+  }
+  @media (min-width: 721px) { #btnDownloadImage { display: none !important; } }
+
   #orderStatus { font-size: 12px; color: var(--text-dim); margin-top: 14px; min-height: 14px; }
   #orderStatus.error { color: #e08a8a; }
   #orderStatus.success { color: #8fd19e; }
@@ -372,13 +408,16 @@
   <div id="labelLayer"></div>
 
   <div id="topbar">
-    <h1>Topitos — vista 3D</h1>
+    <div class="topbar-left">
+      <h1 id="topTitle">Topitos — vista 3D</h1>
+      <button id="langBtn" type="button" title="Idioma / Language">EN</button>
+    </div>
     <div class="topbar-right">
       <a href="index.html" id="backLink">← volver a editar el diseño</a>
       <button id="btnHelp" type="button" title="Ver las ayudas otra vez" aria-label="Ver las ayudas otra vez">?</button>
     </div>
   </div>
-  <div id="hint">arrastrar: orbitar · rueda: zoom · W/E: mover/rotar vástago</div>
+  <div id="hint">arrastrar: orbitar · rueda: zoom</div>
 
   <div id="mobileSteps" role="group" aria-label="Pasos">
     <button type="button" class="mstep" id="mstepImport">1 · Importar</button>
@@ -400,23 +439,16 @@
       </div>
 
       <div class="block" id="blockFlip">
-        <h2>Simetría</h2>
+        <h2>Voltear un lado del arete</h2>
         <button id="btnFlip" class="panel-btn" type="button">Voltear un lado</button>
-      </div>
-
-      <div class="block" id="blockRot">
-        <h2>Rotación <span class="sublabel">sobre el eje del vástago</span></h2>
-        <div class="slider-label"><span>Ángulo</span><span id="rotValue">0°</span></div>
-        <input id="rotSlider" type="range" min="0" max="360" step="1" value="0">
       </div>
 
       <div class="block" id="blockStem">
         <h2>Vástago <span class="sublabel">tipo de poste</span></h2>
         <div id="stemOptions" role="group" aria-label="Tipo de vástago"></div>
         <div id="stemStatus" role="status"></div>
-    <button id="btnStemToggle" class="panel-btn" type="button">
-        Mover Vástago
-    </button>
+        <button id="btnStemToggle" class="panel-btn" type="button">Mover Vástago</button>
+        <button id="btnTutorial3d" class="panel-btn" type="button">Ver tutorial</button>
       </div>
 
       <div class="block" id="blockPrice">
@@ -429,12 +461,18 @@
       </div>
     </div>
   </div>
+  <div id="tutorialPanel3d">
+    <div class="tut-head"><button type="button" id="btnTut3dClose">✕ Cerrar</button></div>
+    <video id="tutVideo3d" controls playsinline preload="metadata"></video>
+  </div>
+
+  <button id="btnDownloadImage" type="button">Descargar imagen</button>
 
   <div id="mobileDock">
     <div id="dockPanel"></div>
     <div id="dockTabs">
       <button type="button" class="dock-tab" data-tab="finish">Acabado</button>
-      <button type="button" class="dock-tab" data-tab="turn">Girar</button>
+      <button type="button" class="dock-tab" data-tab="turn">Voltear</button>
       <button type="button" class="dock-tab" data-tab="stem">Vástago</button>
     </div>
     <div id="dockBar"></div>
@@ -540,6 +578,108 @@ const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxQOfNhcBw8g1Hv7Sdh_
 
 const isMobile = document.documentElement.classList.contains('is-mobile');
 
+let tutorialData = {};
+
+/* ============================================================
+   IDIOMA (ES/EN) — se comparte con index.html vía sessionStorage.
+   ============================================================ */
+const LANG_KEY = 'topitos-lang';
+const I18N_3D = {
+  topTitle: { es: 'Topitos — vista 3D', en: 'Topitos — 3D view' },
+  backLink: { es: '← volver a editar el diseño', en: '← back to edit the design' },
+  hint: { es: 'arrastrar: orbitar · rueda: zoom', en: 'drag: orbit · wheel: zoom' },
+  stealthSteps: { es: 'Ver en 3D', en: '3D view' },
+  mstepImport: { es: '1 · Importar', en: '1 · Import' },
+  mstepScale: { es: '2 · Escalar', en: '2 · Scale' },
+  mstepExtrude: { es: '3 · Ver en 3D', en: '3 · 3D view' },
+  stepImport: { es: '1 · Importar', en: '1 · Import' },
+  stepDraw: { es: '2 · Dibujar', en: '2 · Draw' },
+  stepExtrude: { es: '3 · Ver en 3D', en: '3 · 3D view' },
+  blockFinish: { es: 'Acabado', en: 'Finish' },
+  blockFlip: { es: 'Voltear un lado del arete', en: 'Flip one side of the earring' },
+  btnFlip: { es: 'Voltear un lado', en: 'Flip one side' },
+  blockStem: { es: 'Vástago', en: 'Stem' },
+  stemSublabel: { es: 'tipo de poste', en: 'post type' },
+  btnStemToggle: { es: 'Mover Vástago', en: 'Move Stem' },
+  btnTutorial3d: { es: 'Ver tutorial', en: 'Watch tutorial' },
+  blockPrice: { es: 'Valor estimado', en: 'Estimated value' },
+  btnConfirm: { es: 'Confirmar pedido', en: 'Confirm order' },
+  tutClose: { es: '✕ Cerrar', en: '✕ Close' },
+  btnDownloadImage: { es: 'Descargar imagen', en: 'Download image' },
+  dockFinish: { es: 'Acabado', en: 'Finish' },
+  dockTurn: { es: 'Voltear', en: 'Flip' },
+  dockStem: { es: 'Vástago', en: 'Stem' },
+  orderTitle: { es: 'Confirmar pedido', en: 'Confirm order' },
+  orderSubtitle: { es: 'Completa tus datos, realiza el pago y sube el comprobante.', en: 'Fill in your details, make the payment and upload the receipt.' },
+  ofName: { es: 'Nombre completo', en: 'Full name' },
+  ofLastName: { es: 'Apellidos completos', en: 'Last name' },
+  ofEmail: { es: 'Correo electrónico', en: 'Email' },
+  ofWhatsapp: { es: 'WhatsApp', en: 'WhatsApp' },
+  ofReceive: { es: '¿Cómo prefieres recibirlo?', en: 'How would you like to receive it?' },
+  btnDeliveryPickup: { es: 'Recoger en tienda', en: 'Pick up in store' },
+  btnDeliveryShip: { es: 'Enviar a domicilio', en: 'Ship to home' },
+  ofAddress: { es: 'Dirección de envío', en: 'Shipping address' },
+  addressPh: { es: 'Dirección completa, ciudad y referencias', en: 'Full address, city and references' },
+  qrText: { es: 'Escanea este código QR para realizar el pago. Cuando lo hayas hecho, sube el comprobante en el siguiente campo.', en: 'Scan this QR code to make the payment. When done, upload the receipt in the next field.' },
+  btnQrDownload: { es: 'Descargar el código QR', en: 'Download the QR code' },
+  ofReceipt: { es: 'Comprobante de pago', en: 'Payment receipt' },
+  btnOrderCancel: { es: 'Cancelar', en: 'Cancel' },
+  btnOrderSubmit: { es: 'Enviar', en: 'Send' },
+};
+let currentLang = 'es';
+try { const s = sessionStorage.getItem(LANG_KEY); if (s === 'en' || s === 'es') currentLang = s; } catch (e) {}
+const t3 = (k) => { const e = I18N_3D[k]; return e ? (e[currentLang] || e.es) : ''; };
+function applyLanguage3d() {
+  const set = (id, key) => { const el = document.getElementById(id); if (el) el.textContent = t3(key); };
+  set('backLink', 'backLink');
+  set('hint', 'hint');
+  document.getElementById('topTitle').textContent = t3('topTitle');
+  document.getElementById('mstepImport').textContent = t3('mstepImport');
+  document.getElementById('mstepScale').textContent = t3('mstepScale');
+  document.getElementById('mstepExtrude').textContent = t3('mstepExtrude');
+  document.getElementById('stepImport').querySelector('.step-label').textContent = t3('stepImport');
+  document.getElementById('stepDraw').querySelector('.step-label').textContent = t3('stepDraw');
+  document.getElementById('stepExtrude').querySelector('.step-label').textContent = t3('stepExtrude');
+  document.querySelector('#blockFinish h2').textContent = t3('blockFinish');
+  document.querySelector('#blockFlip h2').textContent = t3('blockFlip');
+  document.getElementById('btnFlip').textContent = t3('btnFlip');
+  document.querySelector('#blockStem h2').innerHTML = t3('blockStem') + ' <span class="sublabel">' + t3('stemSublabel') + '</span>';
+  document.getElementById('btnStemToggle').textContent = t3('btnStemToggle');
+  document.getElementById('btnTutorial3d').textContent = t3('btnTutorial3d');
+  document.querySelector('#blockPrice h2').textContent = t3('blockPrice');
+  document.getElementById('btnConfirm').textContent = t3('btnConfirm');
+  document.getElementById('btnTut3dClose').textContent = t3('tutClose');
+  document.getElementById('btnDownloadImage').textContent = t3('btnDownloadImage');
+  document.querySelectorAll('.dock-tab').forEach((b) => {
+    b.textContent = { finish: t3('dockFinish'), turn: t3('dockTurn'), stem: t3('dockStem') }[b.dataset.tab] || b.textContent;
+  });
+  document.querySelector('#orderModal .card h2').textContent = t3('orderTitle');
+  document.querySelector('#orderModal .subtitle').textContent = t3('orderSubtitle');
+  document.querySelectorAll('#orderForm label').forEach((l) => {
+    const forId = l.getAttribute('for');
+    if (forId && I18N_3D[forId]) l.textContent = t3(forId);
+  });
+  document.getElementById('btnDeliveryPickup').textContent = t3('btnDeliveryPickup');
+  document.getElementById('btnDeliveryShip').textContent = t3('btnDeliveryShip');
+  const addrLbl = document.querySelector('label[for="ofAddress"]'); if (addrLbl) addrLbl.textContent = t3('ofAddress');
+  document.getElementById('ofAddress').placeholder = t3('addressPh');
+  document.querySelector('#qrBlock p').textContent = t3('qrText');
+  document.getElementById('btnQrDownload').textContent = t3('btnQrDownload');
+  document.querySelector('label[for="ofReceipt"]').textContent = t3('ofReceipt');
+  document.getElementById('btnOrderCancel').textContent = t3('btnOrderCancel');
+  document.getElementById('btnOrderSubmit').textContent = t3('btnOrderSubmit');
+}
+function setLanguage3d(lang) {
+  currentLang = lang;
+  try { sessionStorage.setItem(LANG_KEY, lang); } catch (e) {}
+  document.getElementById('langBtn').textContent = lang === 'es' ? 'EN' : 'ES';
+  applyLanguage3d();
+}
+document.getElementById('langBtn').addEventListener('click', () => {
+  setLanguage3d(currentLang === 'es' ? 'en' : 'es');
+});
+setLanguage3d(currentLang);
+
 /* ============================================================
    OVERLAY DE CARGA — mismo patrón que index.html: evita que el
    usuario insista con más clics mientras algo tarda.
@@ -588,6 +728,20 @@ function showLoading(message) {
 function hideLoading() {
   loadingCount = Math.max(0, loadingCount - 1);
   if (loadingCount === 0) document.getElementById('loadingOverlay').style.display = 'none';
+}
+let flashTimer = null;
+function flash(text) {
+  let el = document.getElementById('flashToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'flashToast';
+    el.setAttribute('style', 'position:absolute;left:50%;top:80px;transform:translateX(-50%);z-index:99;background:rgba(28,28,30,0.95);border:1px solid var(--line);color:var(--text);font-size:13px;padding:10px 16px;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.4);pointer-events:none;');
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.style.display = 'block';
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { el.style.display = 'none'; }, 2600);
 }
 showLoading('Cargando tu diseño…');
 
@@ -739,6 +893,7 @@ document.getElementById('btnHelp').addEventListener('click', () => {
 
 const PIECE_DEPTH_MM = 0.8;
 const STEM_LENGTH_MM = 10;
+const STEM_Z_MM = -10;
 const UNITS_PER_PAIR = 2; // un pedido son siempre dos aretes
 const STEM_SURCHARGE_MM = { 'Topito Roscado': 10000 };
 
@@ -1026,13 +1181,13 @@ A.pieceHolder.add(dimGroup);
    stemPos/stemQuat: dónde está y cómo está inclinado el poste.
    pieceAnchor:      posición de la figura sin rotar.
    theta:            giro de la figura alrededor del eje del poste. */
-const stemPos = new THREE.Vector3(0, 0, PIECE_DEPTH_MM / 2);
+const stemPos = new THREE.Vector3(0, 0, STEM_Z_MM);
 const stemQuat = new THREE.Quaternion();
 const pieceAnchor = new THREE.Vector3(0, 0, 0);
-let theta = THREE.MathUtils.degToRad(Number(viewState.rotationDeg) || 0);
+let theta = 0;
 const pivotQuat = new THREE.Quaternion();
 
-if (viewState.stem) stemPos.set(viewState.stem.x, viewState.stem.y, viewState.stem.z);
+if (viewState.stem) stemPos.set(viewState.stem.x, viewState.stem.y, STEM_Z_MM);
 if (viewState.anchor) pieceAnchor.set(viewState.anchor.x, viewState.anchor.y, viewState.anchor.z);
 
 /* El eje de giro es el del vástago: su +Z local, ya inclinado si el cliente
@@ -1065,6 +1220,8 @@ setStemContent(buildDefaultStem());
 function onStemMoved() {
   const worldBefore = pieceWorldPosition();
   stemPos.copy(stemA.position);
+  stemPos.z = STEM_Z_MM;
+  stemA.position.z = STEM_Z_MM;
   stemQuat.copy(stemA.quaternion);
   pivotQuat.setFromAxisAngle(stemAxis(), theta);
   pieceAnchor.copy(worldBefore).sub(stemPos)
@@ -1093,6 +1250,26 @@ applyPairTransform();
   camera.updateProjectionMatrix();
   controls.update();
 })();
+
+/* Rotación automática permanente: la pieza orbita sola desde que se crea, y
+   conserva (perpetúa) el sentido que el cliente le dio la última vez que
+   arrastró. Los pasos del tutorial y cualquier interacción con la cámara no
+   la apagan. */
+let orbitDir = 1;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 2.0 * orbitDir;
+function cameraAzimuth() {
+  return Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z);
+}
+let lastAzimuth = cameraAzimuth();
+controls.addEventListener('start', () => { lastAzimuth = cameraAzimuth(); });
+controls.addEventListener('end', () => {
+  const diff = cameraAzimuth() - lastAzimuth;
+  if (Math.abs(diff) > 0.0006) {
+    orbitDir = diff < 0 ? -1 : 1;
+    controls.autoRotateSpeed = 2.0 * orbitDir;
+  }
+});
 
 /* En celular la barra inferior ocupa la parte baja de la pantalla: se corre
    el punto de mira hacia abajo para que el par quede por encima de ella. */
@@ -1332,10 +1509,6 @@ scene.add(gumball);
 gumball.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
 gumball.addEventListener('objectChange', onStemMoved);
 
-function setGumballMode(mode) {
-  gumball.setMode(mode);
-}
-
 const btnStemToggle = document.getElementById('btnStemToggle');
 btnStemToggle.addEventListener('click', () => {
   const active = !gumball.enabled;
@@ -1343,29 +1516,17 @@ btnStemToggle.addEventListener('click', () => {
   gumball.enabled = active;
   btnStemToggle.classList.toggle('active', active);
 });
-window.addEventListener('keydown', (e) => {
-  if (!gumball.enabled) return;
-  if (e.key.toLowerCase() === 'w') setGumballMode('translate');
-  if (e.key.toLowerCase() === 'e') setGumballMode('rotate');
-});
 
-/* ---------- Voltear y rotar ---------- */
+/* ---------- Voltear un lado del arete ---------- */
 document.getElementById('btnFlip').addEventListener('click', () => {
   flipB = -flipB;
   applyPairTransform();
 });
 
-const rotSlider = document.getElementById('rotSlider');
-const rotValue = document.getElementById('rotValue');
-let rotationDeg = Math.round(THREE.MathUtils.radToDeg(theta));
-rotSlider.value = String(rotationDeg);
-rotValue.textContent = rotationDeg + '°';
-rotSlider.addEventListener('input', (e) => {
-  rotationDeg = Number(e.target.value);
-  rotValue.textContent = rotationDeg + '°';
-  theta = THREE.MathUtils.degToRad(rotationDeg);
-  applyState();
-});
+/* Se eliminó la rotación: la pieza ya no gira en esta vista. Se conserva la
+   variable por compatibilidad con el estado guardado y el pedido (siempre 0). */
+let rotationDeg = 0;
+theta = 0;
 
 /* ---------- Panel plegable (escritorio) ---------- */
 const panelWrap = document.getElementById('panelWrap');
@@ -1390,7 +1551,7 @@ if (isMobile) {
   const dockBar = document.getElementById('dockBar');
   const sections = {
     finish: [document.getElementById('blockFinish')],
-    turn: [document.getElementById('blockFlip'), document.getElementById('blockRot')],
+    turn: [document.getElementById('blockFlip')],
     stem: [document.getElementById('blockStem')],
   };
 
@@ -1456,6 +1617,7 @@ async function loadConfig() {
       img.style.width = scaleNum + '%';
       img.style.height = 'auto';
     }
+    if (data && data.tutorial) tutorialData = data.tutorial;
     if (data.pricing) {
       PRICE_PER_MM['plata-brillante'] = Number(data.pricing.plataBrillante) || null;
       PRICE_PER_MM['plata-mate'] = Number(data.pricing.plataMate) || null;
@@ -1513,6 +1675,7 @@ function updatePrice() {
   let meta = `Par de 2 aretes · ${design.totalLengthMm}mm × $${rate} = $${base.toLocaleString('es-CO')}`;
   if (surcharge > 0) meta += ` + $${surcharge.toLocaleString('es-CO')} (vástago roscado)`;
   meta += ` = $${unit.toLocaleString('es-CO')} c/u`;
+  meta += `\nEl precio corresponde a las proporciones, medidas y complejidad del diseño.`;
   metaEl.textContent = meta;
 }
 
@@ -1520,6 +1683,40 @@ document.querySelectorAll('.finish-btn').forEach((btn) => {
   btn.addEventListener('click', () => applyFinish(btn.dataset.finish));
 });
 applyFinish(currentFinishKey);
+
+/* ---------- Tutorial 3D (video hoja "Tutorial", celda C2) ---------- */
+const tutorialPanel3d = document.getElementById('tutorialPanel3d');
+const tutVideo3d = document.getElementById('tutVideo3d');
+const tut3dSrc = () => (tutorialData && tutorialData.vista3d) || '';
+const btnTutorial3d = document.getElementById('btnTutorial3d');
+btnTutorial3d.addEventListener('click', () => {
+  if (!tut3dSrc()) { flash('El video aún no está disponible.'); return; }
+  if (tutVideo3d.getAttribute('src') !== tut3dSrc()) tutVideo3d.src = tut3dSrc();
+  tutorialPanel3d.classList.add('open');
+  tutVideo3d.play().catch(() => {});
+});
+function closeTutorial3d() {
+  tutorialPanel3d.classList.remove('open');
+  tutVideo3d.pause();
+}
+document.getElementById('btnTut3dClose').addEventListener('click', closeTutorial3d);
+tutorialPanel3d.addEventListener('click', (e) => { if (e.target === tutorialPanel3d) closeTutorial3d(); });
+
+/* ---------- Descargar imagen (solo celular) ---------- */
+document.getElementById('btnDownloadImage').addEventListener('click', () => {
+  try {
+    renderer.render(scene, camera);
+    const url = renderer.domElement.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'topitos.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch (err) {
+    flash('No se pudo descargar la imagen.');
+  }
+});
 
 /* ============================================================
    8. FORMULARIO DE PEDIDO
