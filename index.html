@@ -303,6 +303,7 @@
   }
   #tracePanel input[type=range] { width: 100%; accent-color: var(--accent); }
   #tracePanel input[type=range]:disabled { opacity: .4; }
+  #btnTrace.svg-blocked { opacity: 0.45; cursor: not-allowed; }
   .ref-row { display: flex; gap: 6px; margin-top: 12px; }
   .ref-row button { flex: 1; font-size: 12px; padding: 8px 6px; }
 
@@ -785,6 +786,7 @@ const I18N = {
     importPdf: 'La importación de PDF todavía no está lista. Conviértelo a SVG, o usa la imagen como calco en el siguiente paso.',
     importUnknown: 'Formato no reconocido — usa SVG o DXF.',
     importReadFailed: 'No se pudo leer el archivo: ',
+    traceSvgBlocked: 'Al diseñar a partir de un SVG no se usa la función de calcar imagen.',
     catalogStatusLoading: 'Cargando motivos…',
     catalogStatusEmpty: 'Todavía no hay motivos en la biblioteca. Agrégalos en la hoja "SVG CATALOG".',
     catalogStatusNoMatch: 'No hay motivos con esa etiqueta.',
@@ -890,6 +892,7 @@ const I18N = {
     importPdf: 'PDF import is not ready yet. Convert it to SVG, or use the image as a trace in the next step.',
     importUnknown: 'Unrecognized format — use SVG or DXF.',
     importReadFailed: 'Could not read the file: ',
+    traceSvgBlocked: 'Tracing images is not used when designing from an SVG.',
     catalogStatusLoading: 'Loading motifs…',
     catalogStatusEmpty: 'There are no motifs in the library yet. Add them in the "SVG CATALOG" sheet.',
     catalogStatusNoMatch: 'There are no motifs with that tag.',
@@ -1227,9 +1230,12 @@ function refreshTipsForStage(delay) {
 }
 
 /* La ayuda del "?" solo aplica en el modo de dibujo (2D) — en la pantalla de
-   inicio y en la biblioteca no hay atajos que explicar. */
+   inicio y en la biblioteca no hay atajos que explicar. Se considera "modo de
+   dibujo" a partir del momento en que el cliente acepta alguna de las
+   opciones iniciales (subir archivo, elegir motivo o dibujar a mano). */
+let drawModeEntered = false;
 function inDrawMode() {
-  return importScreen.style.display === 'none' && catalogScreen.style.display !== 'flex';
+  return drawModeEntered && importScreen.style.display === 'none' && catalogScreen.style.display !== 'flex';
 }
 function updateHelpButton() {
   $('btnHelp').style.display = inDrawMode() ? '' : 'none';
@@ -1345,13 +1351,13 @@ function drawFixedDimensions() {
   tickLine(new paper.Point(0, SQUARE_MM + margin), new paper.Point(SQUARE_MM, SQUARE_MM + margin));
   tickLine(new paper.Point(0, SQUARE_MM + margin - 0.3), new paper.Point(0, SQUARE_MM + margin + 0.3));
   tickLine(new paper.Point(SQUARE_MM, SQUARE_MM + margin - 0.3), new paper.Point(SQUARE_MM, SQUARE_MM + margin + 0.3));
-  dimLabel(new paper.Point(SQUARE_MM / 2, SQUARE_MM + margin + 1), SQUARE_MM + ' mm');
+  dimLabel(new paper.Point(SQUARE_MM / 2, SQUARE_MM + margin + 1), (SQUARE_MM / 10) + ' cm');
 
   // Cota izquierda — alto
   tickLine(new paper.Point(-margin, 0), new paper.Point(-margin, SQUARE_MM));
   tickLine(new paper.Point(-margin - 0.3, 0), new paper.Point(-margin + 0.3, 0));
   tickLine(new paper.Point(-margin - 0.3, SQUARE_MM), new paper.Point(-margin + 0.3, SQUARE_MM));
-  dimLabel(new paper.Point(-margin - 1, SQUARE_MM / 2), SQUARE_MM + ' mm', -90);
+  dimLabel(new paper.Point(-margin - 1, SQUARE_MM / 2), (SQUARE_MM / 10) + ' cm', -90);
 }
 drawGrid();
 
@@ -1462,6 +1468,7 @@ let traceRaster = null;
 let traceLocked = false;
 let traceState = { x: SQUARE_MM / 2, y: SQUARE_MM / 2, scale: 1, rotation: 0, opacity: 0.35 };
 let traceSrc = null;
+let traceBlockedSvg = false;
 
 const readout = $('readout');
 const warning = $('warning');
@@ -1830,6 +1837,8 @@ function resetAll() {
   updateUndoRedoButtons();
   if (traceRaster) traceRaster.remove();
   traceRaster = null; traceSrc = null; traceLocked = false;
+  traceBlockedSvg = false;
+  updateTraceAvailability();
   tracePanel.style.display = 'none';
   try { sessionStorage.removeItem(TRACE_KEY); } catch (e) {}
   try { sessionStorage.removeItem(DESIGN_KEY); } catch (e) {}
@@ -1842,9 +1851,15 @@ function resetAll() {
    ============================================================ */
 const traceInput = $('traceInput');
 btnTrace.addEventListener('click', () => {
+  if (traceBlockedSvg) { flash(t('traceSvgBlocked')); return; }
   if (traceRaster) { tracePanel.style.display = 'block'; return; }
   traceInput.click();
 });
+
+function updateTraceAvailability() {
+  btnTrace.classList.toggle('svg-blocked', traceBlockedSvg);
+  btnTrace.title = traceBlockedSvg ? t('traceSvgBlocked') : '';
+}
 
 traceInput.addEventListener('change', (event) => {
   const file = event.target.files[0];
@@ -2161,6 +2176,7 @@ const stepDraw = $('stepDraw');
 const stepExtrude = $('stepExtrude');
 
 function closeImportScreen() {
+  drawModeEntered = true;
   importScreen.style.display = 'none';
   const impVid = $('importVideo');
   if (impVid) impVid.pause();
@@ -2176,6 +2192,7 @@ function closeImportScreen() {
    archivo o motivo (adoptImportedItem llama resetAll antes de reemplazarlo);
    si solo cierra la pantalla otra vez, el diseño sigue intacto. */
 function openImportScreen() {
+  drawModeEntered = false;
   catalogScreen.style.display = 'none';
   importScreen.style.display = 'flex';
   const src = (tutorialData && tutorialData.inicio) || '';
@@ -2316,6 +2333,8 @@ function importSVGDesign(svgText) {
   if (!path) { imported.remove(); throw new Error('el SVG no contiene un trazo utilizable'); }
   if (path !== imported) { path.remove(); imported.remove(); drawLayer.addChild(path); }
   adoptImportedItem(path);
+  traceBlockedSvg = true;
+  updateTraceAvailability();
 }
 
 /* Soporte de DXF: mejor esfuerzo. Convierte LWPOLYLINE/POLYLINE y
