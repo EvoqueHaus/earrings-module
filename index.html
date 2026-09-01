@@ -74,16 +74,23 @@
     cursor: pointer; letter-spacing: 0.04em;
   }
   #langBtn:hover { color: var(--text); border-color: var(--accent); background: rgba(255,255,255,0.08); }
-  /* Botón de idioma en la compuerta inicial (al inicio de todo, antes de los
-     términos): arriba a la derecha. Alterna únicamente ES/EN. */
+  /* Selector de idioma en la compuerta inicial (al inicio de todo, sobre los
+     términos): arriba a la derecha, alterna únicamente ES/EN. */
   #langStart {
     position: absolute; top: 16px; right: 16px; z-index: 2;
-    width: 34px; height: 26px; padding: 0; border-radius: 7px;
-    border: 1px solid var(--line); background: rgba(255,255,255,0.04);
-    color: var(--text); font-size: 11px; font-weight: 600; line-height: 1;
+    display: flex; overflow: hidden;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: rgba(255,255,255,0.04);
+  }
+  #langStart .ls-opt {
+    width: 42px; height: 30px; padding: 0; border: none; border-radius: 0;
+    background: transparent; color: var(--text-dim);
+    font-family: inherit; font-size: 11px; font-weight: 600; line-height: 1;
     cursor: pointer; letter-spacing: 0.04em;
   }
-  #langStart:hover { color: var(--text); border-color: var(--accent); background: rgba(255,255,255,0.08); }
+  #langStart .ls-opt + .ls-opt { border-left: 1px solid var(--line); }
+  #langStart .ls-opt.active { background: var(--accent); color: #0a0a0a; }
+  #langStart .ls-opt:hover:not(.active) { color: var(--text); background: rgba(255,255,255,0.08); }
   .topbar-right { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
   #hint { font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; color: var(--text-dim); }
   #btnHelp {
@@ -726,7 +733,10 @@
   </div>
 
   <div id="termsGate">
-    <button id="langStart" type="button" title="Idioma / Language">EN</button>
+    <div id="langStart" role="group" aria-label="Idioma / Language">
+      <button type="button" class="ls-opt" data-lang="es">ES</button>
+      <button type="button" class="ls-opt" data-lang="en">EN</button>
+    </div>
     <div class="card">
       <h2 data-i18n="termsTitle">Antes de empezar</h2>
       <p data-i18n="termsBody">Diseñar tus Topitos implica aceptar nuestras condiciones comerciales (tiempos de entrega, pagos y garantía).</p>
@@ -1041,7 +1051,7 @@ function applyLanguage() {
   const langBtn = $('langBtn');
   if (langBtn) langBtn.textContent = currentLang === 'es' ? 'EN' : 'ES';
   const langStart = $('langStart');
-  if (langStart) langStart.textContent = currentLang === 'es' ? 'EN' : 'ES';
+  if (langStart) langStart.querySelectorAll('.ls-opt').forEach((b) => b.classList.toggle('active', b.dataset.lang === currentLang));
   const h1 = document.querySelector('#topbar h1');
   if (h1 && !h1.closest('[data-i18n]')) h1.textContent = table.topTitle;
   const importHint = $('importHint');
@@ -1353,8 +1363,8 @@ $('langBtn').addEventListener('click', () => {
   setLanguage(currentLang === 'es' ? 'en' : 'es');
   if (termsDone) refreshTipsForStage(60);
 });
-$('langStart').addEventListener('click', () => {
-  setLanguage(currentLang === 'es' ? 'en' : 'es');
+document.querySelectorAll('#langStart .ls-opt').forEach((b) => {
+  b.addEventListener('click', () => setLanguage(b.dataset.lang));
 });
 setLanguage(currentLang);
 
