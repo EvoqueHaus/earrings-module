@@ -2649,11 +2649,22 @@ const btnTutorial = $('btnTutorial');
 const tutVideoSrc = () => (tutorialData && tutorialData.dibujo) || '';
 let tutorialOpen = false;
 
+/* Reajuste del área de dibujo de Paper.js al tamaño real del canvas. Al abrir
+   el tutorial el canvas se reduce a los 2/3 (CSS), pero Paper.js no vuelve a
+   medir su buffer en un cambio de clase: si no se sincroniza, el dibujo se
+   aplasta horizontalmente. Se lee el rect real del canvas tras aplicar el
+   estado y se iguala paper.view.viewSize. */
+function resize2d() {
+  const r = canvasEl.getBoundingClientRect();
+  paper.view.viewSize = new paper.Size(r.width, r.height);
+  paper.view.update();
+}
 function openTutorial() {
   if (!tutVideoSrc()) { flash(t('tutNoVideo')); return; }
   if (tutVideo.getAttribute('src') !== tutVideoSrc()) tutVideo.src = tutVideoSrc();
   tutorialPanel.classList.add('open');
   document.documentElement.classList.add('tutorial-open');
+  resize2d();
   tutorialOpen = true;
   btnTutorial.textContent = t('tutCloseBtn');
   tutVideo.play().catch(() => {});
@@ -2663,6 +2674,7 @@ function openTutorial() {
 function closeTutorial() {
   tutorialPanel.classList.remove('open');
   document.documentElement.classList.remove('tutorial-open');
+  resize2d();
   tutorialOpen = false;
   tutVideo.pause();
   btnTutorial.textContent = t('tutorialBtn');
