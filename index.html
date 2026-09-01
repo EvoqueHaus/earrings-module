@@ -186,6 +186,33 @@
     border-radius: 4px; font-family: "SFMono-Regular", Menlo, Consolas, monospace;
     font-size: 9px; color: var(--text);
   }
+  /* Icono: botón derecho del mouse (paneo). Mouse minimalista con el botón
+     derecho resaltado en el color de acento. */
+  .mh-right {
+    position: relative; width: 14px; height: 19px; flex: none;
+  }
+  .mh-right::before {
+    content: ''; position: absolute; inset: 0;
+    border: 1.5px solid var(--text-dim); border-radius: 8px;
+  }
+  .mh-right::after {
+    content: ''; position: absolute; top: 2px; right: 2px;
+    width: 4px; height: 5px; border-radius: 2px;
+    background: var(--accent);
+  }
+  /* Icono: rueda del mouse (zoom). Rueda vertical con ranuras horizontales. */
+  .mh-wheel {
+    position: relative; width: 14px; height: 19px; flex: none;
+  }
+  .mh-wheel::before {
+    content: ''; position: absolute; inset: 0;
+    border: 1.5px solid var(--text-dim); border-radius: 8px;
+  }
+  .mh-wheel::after {
+    content: ''; position: absolute; top: 5px; left: 50%; transform: translateX(-50%);
+    width: 8px; height: 9px;
+    background: repeating-linear-gradient(to bottom, var(--text-dim) 0 1px, transparent 1px 3px);
+  }
   .is-mobile #mouseHelp { display: none; }
   .step {
     display: flex; align-items: center; gap: 8px; opacity: 0.4;
@@ -241,16 +268,35 @@
   #importStatus { font-size: 11px; color: var(--text-dim); margin-top: 12px; min-height: 14px; }
   #importStatus.error { color: var(--danger); }
 
-  /* PANTALLA DE INICIO dividida en escritorio: menú a la derecha y video
-     tutorial a la izquierda. En el celular solo queda el menú (sin video). */
-  .import-split {
-    display: flex; align-items: center; justify-content: center; gap: 28px;
-    max-width: 860px; width: 100%; flex-wrap: wrap;
-  }
-  #importVideoWrap { flex: 1 1 360px; max-width: 480px; }
-  #importVideo {
-    width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; background: #000;
-    display: block;
+  /* PANTALLA DE INICIO en escritorio: pantalla dividida por la mitad.
+     Izquierda: video tutorial que llena todo el costado. Derecha: menú con
+     su propio fondo claro. En el celular solo queda el menú (sin video). */
+  @media (min-width: 721px) {
+    #importScreen { padding: 0; align-items: stretch; }
+    .import-split {
+      display: flex; width: 100%; max-width: none;
+      gap: 0; flex-wrap: nowrap; align-items: stretch;
+    }
+    #importVideoWrap {
+      flex: 0 0 50%; width: 50%; height: 100%;
+      background: #000; overflow: hidden;
+    }
+    #importVideo {
+      width: 100%; height: 100%; display: block;
+      object-fit: cover; border-radius: 0;
+    }
+    #importScreen .card {
+      flex: 0 0 50%; width: 50%; max-width: none;
+      margin: 0; border: none; border-radius: 0;
+      background: #e1e1e1; padding: 40px 24px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center;
+    }
+    #importScreen h2 { color: #2b000c; }
+    #importScreen p { color: #2b000c; }
+    #importScreen .card .primary { background: #c2c2c2; color: #2b000c; border: none; }
+    #importStatus { color: #2b000c; }
+    #importStatus.error { color: #a40000; }
   }
   .is-mobile #importVideoWrap { display: none; }
   .is-mobile .import-split { gap: 0; }
@@ -376,6 +422,35 @@
   #btnTutClose:hover { color: var(--text); }
   #tutVideo { width: 100%; display: block; border-radius: 6px; background: #000; }
   .is-mobile #tutorialPanel { display: none !important; }
+
+  /* ---------- TUTORIAL EN PANTALLA DIVIDIDA (PC / modo dibujo) ----------
+     Al abrir el tutorial en escritorio la pantalla se divide: el primer tercio
+     (izquierda) es el video en loop y los dos tercios restantes el área de
+     dibujo 2D. Al cerrar (html.tutorial-open retirado) la zona del tutorial se
+     colapsa y el área de trabajo vuelve a ocuparse por completo. */
+  html:not(.is-mobile).tutorial-open #tutorialPanel {
+    position: fixed; left: 0; top: 0; bottom: 0;
+    width: calc(100vw / 3); max-width: none;
+    display: flex; flex-direction: column;
+    background: #000; border: none; border-radius: 0;
+    padding: 10px; z-index: 8;
+  }
+  html:not(.is-mobile).tutorial-open #tutorialPanel .tut-head {
+    flex: none; display: flex; justify-content: flex-end; margin-bottom: 8px;
+  }
+  html:not(.is-mobile).tutorial-open #tutVideo {
+    flex: 1; width: 100%; height: auto; min-height: 0;
+    border-radius: 0; object-fit: contain;
+  }
+  html:not(.is-mobile).tutorial-open #canvas { left: calc(100vw / 3); width: calc(200vw / 3); }
+  html:not(.is-mobile).tutorial-open #topbar { left: calc(100vw / 3); right: 0; }
+  html:not(.is-mobile).tutorial-open #readout { display: none !important; }
+  html:not(.is-mobile).tutorial-open #areaNotice { left: calc(200vw / 3); transform: translateX(-50%); }
+  html:not(.is-mobile).tutorial-open #warning { left: calc(200vw / 3); transform: translateX(-50%); }
+  html:not(.is-mobile).tutorial-open #mouseHelp { left: calc(200vw / 3); transform: translateX(-50%); }
+  html:not(.is-mobile).tutorial-open #stepper { left: calc(100vw / 3); right: 0; }
+  html:not(.is-mobile).tutorial-open #bgImage { left: calc(200vw / 3); transform: translate(-50%, -50%); }
+  html:not(.is-mobile).tutorial-open #tracePanel { left: calc(100vw / 3 + 20px); }
 
   /* ---------- VENTANA DE AYUDA ----------
      Se abre con el botón "?" del encabezado y solo cuando el usuario está en
@@ -606,14 +681,14 @@
 
   <div id="mouseHelp">
     <div class="mh-item"><span class="mouse-ico" aria-hidden="true"></span><span data-i18n="mhDraw">Clic: dibujar</span></div>
-    <div class="mh-item"><span class="kbd-ico">R</span><span data-i18n="mhRight">Derecho + arrastrar: paneo</span></div>
-    <div class="mh-item"><span class="kbd-ico">W</span><span data-i18n="mhWheel">Rueda: zoom</span></div>
+    <div class="mh-item"><span class="mh-right" aria-hidden="true"></span><span data-i18n="mhRight">Derecho + arrastrar: paneo</span></div>
+    <div class="mh-item"><span class="mh-wheel" aria-hidden="true"></span><span data-i18n="mhWheel">Rueda: zoom</span></div>
   </div>
 
   <div id="importScreen">
     <div class="import-split">
       <div id="importVideoWrap">
-        <video id="importVideo" controls playsinline preload="metadata"></video>
+        <video id="importVideo" controls loop playsinline preload="metadata"></video>
       </div>
       <div class="card">
         <h2 data-i18n="importTitle">Empieza el diseño de tus topitos seleccionando una de éstas opciones</h2>
@@ -675,7 +750,7 @@
     <div class="tut-head">
       <button id="btnTutClose" type="button" aria-label="Cerrar tutorial" data-i18n="closeTut">✕ Cerrar</button>
     </div>
-    <video id="tutVideo" controls playsinline preload="metadata"></video>
+    <video id="tutVideo" controls playsinline preload="metadata" loop></video>
   </div>
 
   <div id="tourLayer"></div>
@@ -2578,6 +2653,7 @@ function openTutorial() {
   if (!tutVideoSrc()) { flash(t('tutNoVideo')); return; }
   if (tutVideo.getAttribute('src') !== tutVideoSrc()) tutVideo.src = tutVideoSrc();
   tutorialPanel.classList.add('open');
+  document.documentElement.classList.add('tutorial-open');
   tutorialOpen = true;
   btnTutorial.textContent = t('tutCloseBtn');
   tutVideo.play().catch(() => {});
@@ -2586,6 +2662,7 @@ function openTutorial() {
 }
 function closeTutorial() {
   tutorialPanel.classList.remove('open');
+  document.documentElement.classList.remove('tutorial-open');
   tutorialOpen = false;
   tutVideo.pause();
   btnTutorial.textContent = t('tutorialBtn');
