@@ -13,6 +13,14 @@
     var coarse = window.matchMedia('(pointer: coarse)').matches;
     var small = Math.min(window.innerWidth, window.innerHeight) <= 720;
     if (coarse && small) document.documentElement.classList.add('is-mobile');
+    /* Si corre dentro de un iframe (incrustada en otra web, PC), se reserva el
+       alto del header de la web contenedora (~70px) para que nada quede oculto
+       ni se corte abajo. */
+    try {
+      if (window.self !== window.top) {
+        document.documentElement.classList.add('embedded');
+      }
+    } catch (e) {}
   })();
 </script>
 <style>
@@ -33,6 +41,13 @@
     -webkit-tap-highlight-color: transparent;
   }
   #app { position: relative; width: 100%; height: 100%; overflow: hidden; }
+  /* Incrustada en un iframe de otra web en PC: se baja el contenedor el alto del
+     header (~70px) y se compensa la altura para que nada quede oculto ni se
+     corte abajo. `resize3d()` ya mide el contenedor visible con este desplazamiento. */
+  html.embedded:not(.is-mobile) #app {
+    margin-top: 70px;
+    height: calc(100% - 70px);
+  }
   canvas { position: absolute; top: 0; left: 0; z-index: 1; display: block; touch-action: none; }
   #labelLayer { position: absolute; top: 0; left: 0; z-index: 1; pointer-events: none; overflow: hidden; }
   .dim-label {
@@ -1059,7 +1074,11 @@ function resize3d() {
     && !document.documentElement.classList.contains('is-mobile');
   const gutter = open ? Math.round(window.innerWidth / 3) : 0;
   const w = window.innerWidth - gutter;
-  const h = window.innerHeight;
+  /* La altura real la da #app: coincide con el iframe normal o, si va incrustada
+     bajo un header (embedded), con su alto ya descontado. Así el lienzo no se
+     corta ni se estira cuando la app pierde ~70px por el header. */
+  const appEl = document.getElementById('app');
+  const h = (appEl && appEl.clientHeight > 0) ? appEl.clientHeight : window.innerHeight;
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
