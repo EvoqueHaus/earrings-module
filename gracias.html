@@ -58,25 +58,58 @@
       </svg>
     </div>
     <h1 id="thanksTitle">¡Gracias por tu pedido!</h1>
-    <p>Ya recibimos tus datos y el comprobante de pago. Vamos a confirmar todo y te escribimos por WhatsApp para coordinar los detalles.</p>
-    <div class="order-note">Si tienes alguna duda mientras tanto, también puedes escribirnos directamente.</div>
-    <a class="btn" href="index.html">Diseñar otro Topito</a>
+    <p id="thanksBody">Ya recibimos tus datos y el comprobante de pago. Vamos a confirmar todo y te escribimos por WhatsApp para coordinar los detalles.</p>
+    <div class="order-note" id="thanksNote">Si tienes alguna duda mientras tanto, también puedes escribirnos directamente.</div>
+    <a class="btn" href="index.html" id="thanksBtn">Diseñar otro Topito</a>
   </div>
 </div>
 
 <script>
-  // Saludo personalizado si venimos justo de confirmar un pedido.
+  // La página adopta automáticamente el idioma (ES/EN) que el usuario eligió
+  // antes en el editor, usando la misma clave compartida de la app.
+  let lang = 'es';
+  try {
+    const s = sessionStorage.getItem('topitos-lang');
+    if (s === 'en' || s === 'es') lang = s;
+  } catch (e) {}
+
+  const T = {
+    es: {
+      title: '¡Gracias por tu pedido!',
+      greet: '¡Gracias, {name}!',
+      body: 'Ya recibimos tus datos y el comprobante de pago. Vamos a confirmar todo y te escribimos por WhatsApp para coordinar los detalles.',
+      note: 'Si tienes alguna duda mientras tanto, también puedes escribirnos directamente.',
+      btn: 'Diseñar otro Topito'
+    },
+    en: {
+      title: 'Thank you for your order!',
+      greet: 'Thank you, {name}!',
+      body: 'We received your details and payment receipt. We\'ll confirm everything and text you on WhatsApp to coordinate the details.',
+      note: 'If you have any questions in the meantime, you can also write to us directly.',
+      btn: 'Design another Topito'
+    }
+  };
+
+  const dict = T[lang] || T.es;
+  document.getElementById('thanksBody').textContent = dict.body;
+  document.getElementById('thanksNote').textContent = dict.note;
+  document.getElementById('thanksBtn').textContent = dict.btn;
+  let title = dict.title;
+
+  // Saludo personalizado si venimos justo de confirmar un pedido, en el idioma de la página.
   try {
     const raw = sessionStorage.getItem('topitos-thanks');
     const data = raw ? JSON.parse(raw) : null;
     if (data && data.firstName) {
-      document.getElementById('thanksTitle').textContent = '¡Gracias, ' + data.firstName + '!';
+      title = dict.greet.replace('{name}', data.firstName);
     }
     sessionStorage.removeItem('topitos-thanks');
   } catch (e) {}
 
+  document.getElementById('thanksTitle').textContent = title;
+
   // Mismo fondo que el resto de la app (Background, con variante móvil A2/B2/C2).
-  const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxQOfNhcBw8g1Hv7Sdh_JjNQgrLymY5zo4hSpFUiN09K36-UUh1_q1r3MaPWhWfhgPo/exec';
+  const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbyeFmWfHaxAlFcSrEE0dPK71eNbMomJ4KRtkFe-uRX0NruGBsSL8Sz2rQ-XGactrjYu/exec';
   const isMobile = window.matchMedia('(max-width: 720px)').matches && window.matchMedia('(pointer: coarse)').matches;
 
   function normalizeImageUrl(url) {
