@@ -77,6 +77,51 @@
     font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; color: var(--text-dim);
   }
 
+  /* ---------- ILUSTRACIONES DE FUNCIONES DEL MOUSE (escritorio) ----------
+     Misma tira inferior que en el modo 2D: recuerda qué hace cada botón del
+     mouse, justo encima del stepper. Solo en PC. */
+  #mouseHelp {
+    position: absolute; bottom: 76px; left: 50%; transform: translateX(-50%); z-index: 2;
+    display: flex; align-items: center; gap: 16px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 9px; padding: 7px 14px;
+    pointer-events: none;
+  }
+  .mh-item { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--text-dim); }
+  .mouse-ico {
+    position: relative; width: 14px; height: 19px; border: 1.5px solid var(--text-dim);
+    border-radius: 8px;
+  }
+  .mouse-ico::before {
+    content: ''; position: absolute; top: 2px; left: 50%; transform: translateX(-50%);
+    width: 1.5px; height: 5px; background: var(--text-dim);
+  }
+  .mh-right {
+    position: relative; width: 14px; height: 19px; flex: none;
+  }
+  .mh-right::before {
+    content: ''; position: absolute; inset: 0;
+    border: 1.5px solid var(--text-dim); border-radius: 8px;
+  }
+  .mh-right::after {
+    content: ''; position: absolute; top: 2px; right: 2px;
+    width: 4px; height: 5px; border-radius: 2px;
+    background: var(--accent);
+  }
+  .mh-wheel {
+    position: relative; width: 14px; height: 19px; flex: none;
+  }
+  .mh-wheel::before {
+    content: ''; position: absolute; inset: 0;
+    border: 1.5px solid var(--text-dim); border-radius: 8px;
+  }
+  .mh-wheel::after {
+    content: ''; position: absolute; top: 5px; left: 50%; transform: translateX(-50%);
+    width: 8px; height: 9px;
+    background: repeating-linear-gradient(to bottom, var(--text-dim) 0 1px, transparent 1px 3px);
+  }
+  .is-mobile #mouseHelp { display: none; }
+
   /* ---------- PANEL ---------- */
   #panelWrap {
     position: absolute; top: 56px; right: 16px; z-index: 4;
@@ -307,6 +352,7 @@
   html:not(.is-mobile).tutorial3d-open #topbar { left: calc(100vw / 3); right: 0; }
   html:not(.is-mobile).tutorial3d-open #hint { left: calc(100vw / 3 + 20px); }
   html:not(.is-mobile).tutorial3d-open #stepper { left: calc(100vw / 3); right: 0; }
+  html:not(.is-mobile).tutorial3d-open #mouseHelp { left: calc(200vw / 3); transform: translateX(-50%); }
   html:not(.is-mobile).tutorial3d-open #bgImage { left: calc(200vw / 3); transform: translate(-50%, -50%); }
   html:not(.is-mobile).tutorial3d-open #mobileDock { left: calc(100vw / 3); }
 
@@ -437,6 +483,12 @@
     </div>
   </div>
   <div id="hint">arrastrar: orbitar · rueda: zoom</div>
+
+  <div id="mouseHelp">
+    <div class="mh-item"><span class="mouse-ico" aria-hidden="true"></span><span id="mhRotate">Arrastrar: orbitar</span></div>
+    <div class="mh-item"><span class="mh-right" aria-hidden="true"></span><span id="mhRight">Derecho + arrastrar: paneo</span></div>
+    <div class="mh-item"><span class="mh-wheel" aria-hidden="true"></span><span id="mhWheel">Rueda: zoom</span></div>
+  </div>
 
   <div id="mobileSteps" role="group" aria-label="Pasos">
     <button type="button" class="mstep" id="mstepImport">1 · Importar</button>
@@ -605,6 +657,9 @@ const I18N_3D = {
   topTitle: { es: 'Topitos — vista 3D', en: 'Topitos — 3D view' },
   backLink: { es: '← volver a editar el diseño', en: '← back to edit the design' },
   hint: { es: 'arrastrar: orbitar · rueda: zoom', en: 'drag: orbit · wheel: zoom' },
+  mhRotate: { es: 'Arrastrar: orbitar', en: 'Drag: orbit' },
+  mhRight: { es: 'Derecho + arrastrar: paneo', en: 'Right-click + drag: pan' },
+  mhWheel: { es: 'Rueda: zoom', en: 'Wheel: zoom' },
   stealthSteps: { es: 'Ver en 3D', en: '3D view' },
   mstepImport: { es: '1 · Importar', en: '1 · Import' },
   mstepScale: { es: '2 · Escalar', en: '2 · Scale' },
@@ -651,6 +706,9 @@ function applyLanguage3d() {
   const set = (id, key) => { const el = document.getElementById(id); if (el) el.textContent = t3(key); };
   set('backLink', 'backLink');
   set('hint', 'hint');
+  set('mhRotate', 'mhRotate');
+  set('mhRight', 'mhRight');
+  set('mhWheel', 'mhWheel');
   document.getElementById('topTitle').textContent = t3('topTitle');
   document.getElementById('mstepImport').textContent = t3('mstepImport');
   document.getElementById('mstepScale').textContent = t3('mstepScale');
