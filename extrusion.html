@@ -282,16 +282,35 @@
   #btnTut3dClose:hover { border-color: var(--accent); color: var(--text); }
   .is-mobile #tutorialPanel3d { display: none !important; }
 
-  /* ---------- DESCARGAR IMAGEN (solo celular) ---------- */
-  #btnDownloadImage {
-    position: absolute; z-index: 40; right: 16px; bottom: 96px;
-    font-family: inherit; font-size: 12px; padding: 10px 16px; border-radius: 8px;
-    border: 1px solid var(--accent); background: var(--accent); color: #1c1c1e;
-    font-weight: 600; cursor: pointer;
+  /* ---------- TUTORIAL 3D EN PANTALLA DIVIDIDA (PC) ----------
+     Al abrir el tutorial en el visor 3D la pantalla se divide: el primer
+     tercio (izquierda) es el video en loop y los dos tercios restantes el
+     visor. Al cerrar (html.tutorial3d-open retirado) la zona se colapsa y el
+     visor vuelve a ocuparse por completo. El ancho útil del renderer se
+     reajusta en JS (resize3d) cuando se abre/cierra. */
+  html:not(.is-mobile).tutorial3d-open #tutorialPanel3d {
+    position: fixed; left: 0; top: 0; bottom: 0;
+    width: calc(100vw / 3); max-width: none;
+    display: flex; flex-direction: column;
+    background: #000; border: none; border-radius: 0;
+    padding: 10px; z-index: 8; box-shadow: none;
   }
-  @media (min-width: 721px) { #btnDownloadImage { display: none !important; } }
+  html:not(.is-mobile).tutorial3d-open #tutorialPanel3d .tut-head {
+    flex: none; display: flex; justify-content: flex-end; margin-bottom: 8px;
+  }
+  html:not(.is-mobile).tutorial3d-open #tutVideo3d {
+    flex: 1; width: 100%; height: auto; min-height: 0;
+    border-radius: 0; object-fit: contain;
+  }
+  html:not(.is-mobile).tutorial3d-open #canvas { left: calc(100vw / 3); width: calc(200vw / 3); }
+  html:not(.is-mobile).tutorial3d-open #labelLayer { left: calc(100vw / 3); width: calc(200vw / 3); }
+  html:not(.is-mobile).tutorial3d-open #topbar { left: calc(100vw / 3); right: 0; }
+  html:not(.is-mobile).tutorial3d-open #hint { left: calc(100vw / 3 + 20px); }
+  html:not(.is-mobile).tutorial3d-open #stepper { left: calc(100vw / 3); right: 0; }
+  html:not(.is-mobile).tutorial3d-open #bgImage { left: calc(200vw / 3); transform: translate(-50%, -50%); }
+  html:not(.is-mobile).tutorial3d-open #mobileDock { left: calc(100vw / 3); }
 
-  #orderStatus { font-size: 12px; color: var(--text-dim); margin-top: 14px; min-height: 14px; }
+      #orderStatus { font-size: 12px; color: var(--text-dim); margin-top: 14px; min-height: 14px; }
   #orderStatus.error { color: #e08a8a; }
   #orderStatus.success { color: #8fd19e; }
   #orderModal .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
@@ -390,9 +409,9 @@
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
     color: var(--text-dim); margin: 0 0 8px;
   }
-  .is-mobile #dockTabs { display: flex; gap: 6px; padding: 8px 10px 0; }
-  .is-mobile #dockBar { padding: 10px 12px 12px; }
-  .is-mobile #dockBar #blockPrice { display: flex; align-items: center; gap: 12px; }
+  .is-mobile #dockTabs { display: flex; gap: 6px; padding: 10px 10px 4px; }
+  .is-mobile #dockBar { padding: 12px 12px 14px; }
+  .is-mobile #dockBar #blockPrice { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
   .is-mobile #dockBar #blockPrice h2 { display: none; }
   .is-mobile #dockBar #priceInfo { flex: 1; min-width: 0; }
   .is-mobile #dockBar #price { font-size: 17px; margin: 0; }
@@ -444,7 +463,7 @@
       </div>
 
       <div class="block" id="blockStem">
-        <h2>Vástago <span class="sublabel">tipo de poste</span></h2>
+        <h2>Palito <span class="sublabel">tipo de poste</span></h2>
         <div id="stemOptions" role="group" aria-label="Tipo de vástago"></div>
         <div id="stemStatus" role="status"></div>
         <button id="btnStemToggle" class="panel-btn" type="button">Mover el palito</button>
@@ -463,17 +482,15 @@
   </div>
   <div id="tutorialPanel3d">
     <div class="tut-head"><button type="button" id="btnTut3dClose">✕ Cerrar</button></div>
-    <video id="tutVideo3d" controls playsinline preload="metadata"></video>
+    <video id="tutVideo3d" controls playsinline preload="metadata" loop></video>
   </div>
-
-  <button id="btnDownloadImage" type="button">Descargar imagen</button>
 
   <div id="mobileDock">
     <div id="dockPanel"></div>
     <div id="dockTabs">
       <button type="button" class="dock-tab" data-tab="finish">Acabado</button>
       <button type="button" class="dock-tab" data-tab="turn">Voltear</button>
-      <button type="button" class="dock-tab" data-tab="stem">Vástago</button>
+      <button type="button" class="dock-tab" data-tab="stem">Palito</button>
     </div>
     <div id="dockBar"></div>
   </div>
@@ -598,17 +615,16 @@ const I18N_3D = {
   blockFinish: { es: 'Acabado', en: 'Finish' },
   blockFlip: { es: 'Voltear un lado del arete', en: 'Flip one side of the earring' },
   btnFlip: { es: 'Voltear un lado', en: 'Flip one side' },
-  blockStem: { es: 'Vástago', en: 'Stem' },
+  blockStem: { es: 'Palito', en: 'Stem' },
   stemSublabel: { es: 'tipo de poste', en: 'post type' },
   btnStemToggle: { es: 'Mover el palito', en: 'Move the stem' },
   btnTutorial3d: { es: 'Ver tutorial', en: 'Watch tutorial' },
   blockPrice: { es: 'Valor estimado', en: 'Estimated value' },
   btnConfirm: { es: 'Confirmar pedido', en: 'Confirm order' },
   tutClose: { es: '✕ Cerrar', en: '✕ Close' },
-  btnDownloadImage: { es: 'Descargar imagen', en: 'Download image' },
   dockFinish: { es: 'Acabado', en: 'Finish' },
   dockTurn: { es: 'Voltear', en: 'Flip' },
-  dockStem: { es: 'Vástago', en: 'Stem' },
+  dockStem: { es: 'Palito', en: 'Stem' },
   orderTitle: { es: 'Confirmar pedido', en: 'Confirm order' },
   orderSubtitle: { es: 'Completa tus datos, realiza el pago y sube el comprobante.', en: 'Fill in your details, make the payment and upload the receipt.' },
   ofName: { es: 'Nombre completo', en: 'Full name' },
@@ -649,7 +665,6 @@ function applyLanguage3d() {
   document.querySelector('#blockPrice h2').textContent = t3('blockPrice');
   document.getElementById('btnConfirm').textContent = t3('btnConfirm');
   document.getElementById('btnTut3dClose').textContent = t3('tutClose');
-  document.getElementById('btnDownloadImage').textContent = t3('btnDownloadImage');
   document.querySelectorAll('.dock-tab').forEach((b) => {
     b.textContent = { finish: t3('dockFinish'), turn: t3('dockTurn'), stem: t3('dockStem') }[b.dataset.tab] || b.textContent;
   });
@@ -976,13 +991,22 @@ keyLight.position.set(5, 8, 6);
 scene.add(keyLight);
 scene.add(new THREE.AmbientLight(0xffffff, 0.25));
 
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+/* Reajuste del visor al área útil. Cuando el tutorial 3D está abierto en
+   escritorio, el visor ocupa los 2/3 derechos y el gutter izquierdo (1/3) es
+   para el video. Se llama al abrir/cerrar el tutorial y en cada resize. */
+function resize3d() {
+  const open = document.documentElement.classList.contains('tutorial3d-open')
+    && !document.documentElement.classList.contains('is-mobile');
+  const gutter = open ? Math.round(window.innerWidth / 3) : 0;
+  const w = window.innerWidth - gutter;
+  const h = window.innerHeight;
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  labelRenderer.setSize(window.innerWidth, window.innerHeight);
-});
+  renderer.setSize(w, h);
+  labelRenderer.setSize(w, h);
+}
+window.addEventListener('resize', resize3d);
 
 /* Renderer aparte para las etiquetas de texto de las cotas: son HTML real
    (nítido a cualquier zoom) posicionado por Three.js en cada frame según la
@@ -1695,34 +1719,23 @@ const tutorialPanel3d = document.getElementById('tutorialPanel3d');
 const tutVideo3d = document.getElementById('tutVideo3d');
 const tut3dSrc = () => (tutorialData && tutorialData.vista3d) || '';
 const btnTutorial3d = document.getElementById('btnTutorial3d');
-btnTutorial3d.addEventListener('click', () => {
+function openTutorial3d() {
   if (!tut3dSrc()) { flash('El video aún no está disponible.'); return; }
   if (tutVideo3d.getAttribute('src') !== tut3dSrc()) tutVideo3d.src = tut3dSrc();
   tutorialPanel3d.classList.add('open');
+  document.documentElement.classList.add('tutorial3d-open');
+  resize3d();
   tutVideo3d.play().catch(() => {});
-});
+}
+btnTutorial3d.addEventListener('click', openTutorial3d);
 function closeTutorial3d() {
   tutorialPanel3d.classList.remove('open');
+  document.documentElement.classList.remove('tutorial3d-open');
+  resize3d();
   tutVideo3d.pause();
 }
 document.getElementById('btnTut3dClose').addEventListener('click', closeTutorial3d);
 tutorialPanel3d.addEventListener('click', (e) => { if (e.target === tutorialPanel3d) closeTutorial3d(); });
-
-/* ---------- Descargar imagen (solo celular) ---------- */
-document.getElementById('btnDownloadImage').addEventListener('click', () => {
-  try {
-    renderer.render(scene, camera);
-    const url = renderer.domElement.toDataURL('image/png');
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'topitos.png';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  } catch (err) {
-    flash('No se pudo descargar la imagen.');
-  }
-});
 
 /* ============================================================
    8. FORMULARIO DE PEDIDO
