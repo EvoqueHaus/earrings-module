@@ -493,7 +493,7 @@
       <button id="langBtn" type="button" title="Idioma / Language">EN</button>
     </div>
     <div class="topbar-right">
-      <a href="index.html" id="backLink">← volver a editar el diseño</a>
+      <a href="Dibujar.html" id="backLink">← volver a editar el diseño</a>
       <button id="btnHelp" type="button" title="Ver las ayudas otra vez" aria-label="Ver las ayudas otra vez">?</button>
     </div>
   </div>
@@ -1025,11 +1025,11 @@ function saveViewState() {
 window.addEventListener('pagehide', saveViewState);
 document.getElementById('backLink').addEventListener('click', saveViewState);
 
-/* Los pasos 1 y 2 viven en index.html — desde aquí solo se vuelve, guardando
+/* Los pasos 1 y 2 viven en Dibujar.html — desde aquí solo se vuelve, guardando
    primero el estado de la vista 3D como hace "← volver". */
 function backToEditor() {
   saveViewState();
-  window.location.href = 'index.html';
+  window.location.href = 'Dibujar.html';
 }
 document.getElementById('stepImport').addEventListener('click', backToEditor);
 document.getElementById('stepDraw').addEventListener('click', backToEditor);
