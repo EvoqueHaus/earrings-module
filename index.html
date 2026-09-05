@@ -15,6 +15,15 @@
     var coarse = window.matchMedia('(pointer: coarse)').matches;
     var small = Math.min(window.innerWidth, window.innerHeight) <= 720;
     if (coarse && small) document.documentElement.classList.add('is-mobile');
+    /* Detecta si la app corre dentro de un iframe (p. ej. incrustada en otra
+       web). En ese caso se reserva el alto del header de la web contenedora
+       (70px en PC) para que ningún elemento de la app quede oculto ni se
+       corte el área inferior. */
+    try {
+      if (window.self !== window.top) {
+        document.documentElement.classList.add('embedded');
+      }
+    } catch (e) {}
   })();
 </script>
 <style>
@@ -22,11 +31,9 @@
     --bg: #0a0a0a;
     --panel: #161616;
     --line: rgba(255,255,255,0.12);
-    --square: #6a6a6a;
     --accent: #ffffff;
     --text: #f5f5f5;
     --text-dim: #8a8a8a;
-    --danger: #d16565;
   }
   * { box-sizing: border-box; }
   html, body {
@@ -44,9 +51,24 @@
     margin-top: 70px;
     height: calc(100% - 70px);
   }
-  canvas {
-    position: absolute; top: 0; left: 0; z-index: 1;
-    display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair;
+
+  button {
+    font-family: inherit; font-size: 13px; font-weight: 500;
+    background: transparent; color: var(--text);
+    border: 1px solid transparent; border-radius: 7px;
+    padding: 8px 14px; cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  button:hover:not(:disabled) { background: rgba(255,255,255,0.06); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button:disabled { color: var(--text-dim); cursor: not-allowed; opacity: 0.5; }
+  button.primary { background: var(--accent); color: #0a0a0a; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: #d8d8d8; }
+  button.primary:disabled { background: rgba(255,255,255,0.22); color: rgba(255,255,255,0.55); opacity: 1; }
+
+  #bgImage {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 0; pointer-events: none; max-width: none;
   }
 
   /* ---------- PRELUDE ---------- */
@@ -66,22 +88,27 @@
     #prelude, #preludeLogo { transition-duration: .01ms; }
   }
 
-  #topbar {
-    position: absolute; top: 0; left: 0; right: 0; z-index: 2;
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    padding: 14px 20px;
-    background: linear-gradient(to bottom, rgba(28,28,30,0.9), transparent);
-    pointer-events: none;
+  /* ---------- COMPUERTA DE TÉRMINOS Y CONDICIONES ---------- */
+  #termsGate {
+    position: fixed; inset: 0; z-index: 46;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
   }
-  #topbar h1 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
-  .topbar-left { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
-  #langBtn {
-    width: 34px; height: 26px; flex: none; padding: 0; border-radius: 7px;
-    border: 1px solid var(--line); background: rgba(255,255,255,0.04);
-    color: var(--text); font-size: 11px; font-weight: 600; line-height: 1;
-    cursor: pointer; letter-spacing: 0.04em;
+  #termsGate .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 30px; width: 380px; max-width: 100%; text-align: center;
   }
-  #langBtn:hover { color: var(--text); border-color: var(--accent); background: rgba(255,255,255,0.08); }
+  #termsGate h2 { font-size: 16px; margin: 0 0 10px; }
+  #termsGate p { font-size: 12px; color: var(--text-dim); line-height: 1.55; margin: 0 0 16px; }
+  #termsGate a { color: var(--text); }
+  #termsGate label {
+    display: flex; align-items: flex-start; gap: 8px; text-align: left;
+    font-size: 12px; color: var(--text-dim); margin-bottom: 18px; cursor: pointer;
+  }
+  #termsGate input[type=checkbox] { margin-top: 2px; accent-color: var(--accent); }
+  #termsGate .row { display: flex; flex-direction: column; gap: 8px; }
+
   /* Selector de idioma en la compuerta inicial (al inicio de todo, sobre los
      términos): arriba a la derecha, alterna únicamente ES/EN. */
   #langStart {
@@ -99,182 +126,6 @@
   #langStart .ls-opt + .ls-opt { border-left: 1px solid var(--line); }
   #langStart .ls-opt.active { background: var(--accent); color: #0a0a0a; }
   #langStart .ls-opt:hover:not(.active) { color: var(--text); background: rgba(255,255,255,0.08); }
-  .topbar-right { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
-  #hint { font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; color: var(--text-dim); }
-  #btnHelp {
-    width: 26px; height: 26px; flex: none; padding: 0; border-radius: 50%;
-    border: 1px solid var(--line); background: rgba(255,255,255,0.04);
-    color: var(--text-dim); font-size: 12px; line-height: 1; cursor: pointer;
-  }
-  #btnHelp:hover { color: var(--text); border-color: var(--accent); background: rgba(255,255,255,0.08); }
-  #readout {
-    position: absolute; top: 120px; left: 20px; z-index: 2;
-    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
-    font-size: 12px; color: var(--text-dim);
-    pointer-events: none;
-  }
-  #areaNotice {
-    position: absolute; top: 92px; left: 50%; transform: translateX(-50%); z-index: 2;
-    font-size: 11px; color: var(--text-dim);
-    background: var(--panel); border: 1px solid var(--line);
-    border-radius: 7px; padding: 6px 10px;
-    pointer-events: none; white-space: nowrap;
-  }
-
-  #drawPanelWrap {
-    position: absolute; top: 56px; right: 16px; z-index: 4;
-    display: flex; align-items: flex-start; gap: 8px;
-    transition: transform .25s ease;
-  }
-  #drawPanelWrap.collapsed { transform: translateX(calc(100% - 38px)); }
-  @media (prefers-reduced-motion: reduce) { #drawPanelWrap { transition: none; } }
-
-  #drawPanelToggle {
-    width: 30px; height: 30px; flex: none; padding: 0;
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(35,35,38,0.9); border: 1px solid var(--line);
-    border-radius: 8px; color: var(--text); font-size: 15px; line-height: 1; cursor: pointer;
-    backdrop-filter: blur(6px);
-  }
-  #drawPanelToggle:hover { background: rgba(255,255,255,0.1); }
-
-  #drawPanel {
-    width: 180px;
-    background: rgba(35,35,38,0.85);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 14px;
-    backdrop-filter: blur(6px);
-  }
-  #drawPanel h2 {
-    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
-    color: var(--text-dim); margin: 0 0 8px;
-  }
-  #drawPanel .block + .block { margin-top: 14px; }
-  #drawPanel button { width: 100%; margin-bottom: 4px; }
-  #drawPanel button:last-child { margin-bottom: 0; }
-  #drawPanel input[type=range] { width: 100%; accent-color: var(--accent); }
-  button {
-    font-family: inherit; font-size: 13px; font-weight: 500;
-    background: transparent; color: var(--text);
-    border: 1px solid transparent; border-radius: 7px;
-    padding: 8px 14px; cursor: pointer;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
-  }
-  button:hover:not(:disabled) { background: rgba(255,255,255,0.06); }
-  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  button:disabled { color: var(--text-dim); cursor: not-allowed; opacity: 0.5; }
-  button.primary { background: var(--accent); color: #0a0a0a; font-weight: 600; }
-  button.primary:hover:not(:disabled) { background: #d8d8d8; }
-  button.primary:disabled { background: rgba(255,255,255,0.22); color: rgba(255,255,255,0.55); opacity: 1; }
-  button.danger { color: var(--danger); }
-  button.active { border-color: var(--accent); color: var(--accent); }
-
-  #btnUndo, #btnRedo { font-size: 20px; padding: 6px 10px; min-width: 38px; display: flex; align-items: center; gap: 6px; }
-  #btnUndo .undo-label, #btnRedo .undo-label { font-size: 12px; }
-
-  #bgImage {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    z-index: 0; pointer-events: none; max-width: none;
-  }
-
-  #stepper {
-    position: absolute; bottom: 0; left: 0; right: 0; z-index: 2;
-    display: flex; align-items: center; justify-content: center; gap: 28px;
-    padding: 16px 0;
-    background: linear-gradient(to top, rgba(28,28,30,0.9), transparent);
-    pointer-events: none;
-  }
-  /* ---------- ILUSTRACIONES DE FUNCIONES DEL MOUSE (escritorio) ----------
-     Tira pequeña en la parte baja central del editor: recuerda de un vistazo
-     qué hace cada botón y la rueda, justo encima del stepper. Solo en PC. */
-  #mouseHelp {
-    position: absolute; bottom: 76px; left: 50%; transform: translateX(-50%); z-index: 2;
-    display: flex; align-items: center; gap: 16px;
-    background: var(--panel); border: 1px solid var(--line);
-    border-radius: 9px; padding: 7px 14px;
-    pointer-events: none;
-  }
-  .mh-item { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--text-dim); }
-  .mouse-ico {
-    position: relative; width: 14px; height: 19px; border: 1.5px solid var(--text-dim);
-    border-radius: 8px;
-  }
-  .mouse-ico::before {
-    content: ''; position: absolute; top: 2px; left: 50%; transform: translateX(-50%);
-    width: 1.5px; height: 5px; background: var(--text-dim);
-  }
-  .kbd-ico {
-    width: 16px; height: 16px; padding: 1px; box-sizing: border-box;
-    display: inline-flex; align-items: center; justify-content: center;
-    border: 1px solid var(--line); background: rgba(255,255,255,0.06);
-    border-radius: 4px; font-family: "SFMono-Regular", Menlo, Consolas, monospace;
-    font-size: 9px; color: var(--text);
-  }
-  /* Icono: botón derecho del mouse (paneo). Mouse minimalista con el botón
-     derecho resaltado en el color de acento. */
-  .mh-right {
-    position: relative; width: 14px; height: 19px; flex: none;
-  }
-  .mh-right::before {
-    content: ''; position: absolute; inset: 0;
-    border: 1.5px solid var(--text-dim); border-radius: 8px;
-  }
-  .mh-right::after {
-    content: ''; position: absolute; top: 2px; right: 2px;
-    width: 4px; height: 5px; border-radius: 2px;
-    background: var(--accent);
-  }
-  /* Icono: rueda del mouse (zoom). Rueda vertical con ranuras horizontales. */
-  .mh-wheel {
-    position: relative; width: 14px; height: 19px; flex: none;
-  }
-  .mh-wheel::before {
-    content: ''; position: absolute; inset: 0;
-    border: 1.5px solid var(--text-dim); border-radius: 8px;
-  }
-  .mh-wheel::after {
-    content: ''; position: absolute; top: 5px; left: 50%; transform: translateX(-50%);
-    width: 8px; height: 9px;
-    background: repeating-linear-gradient(to bottom, var(--text-dim) 0 1px, transparent 1px 3px);
-  }
-  .is-mobile #mouseHelp { display: none; }
-  .step {
-    display: flex; align-items: center; gap: 8px; opacity: 0.4;
-    pointer-events: auto; cursor: pointer;
-    background: none; border: none; padding: 4px; font-family: inherit;
-    color: inherit; appearance: none; -webkit-appearance: none;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .step:hover, .step:focus-visible { opacity: 0.7; }
-  .step:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
-  .step.active { opacity: 1; }
-  .step-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); }
-  .step.active .step-dot { background: var(--accent); }
-  .step-label { font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; }
-
-  /* ---------- BARRA DE PASOS EN MÓVIL ----------
-     Reemplaza al stepper inferior en el celular: los mismos tres pasos,
-     arriba y con nombres que se entienden sin saber qué es una extrusión. */
-  #mobileSteps { display: none; }
-  .mstep {
-    flex: 1; font-family: inherit; font-size: 11px; font-weight: 500;
-    padding: 9px 4px; border-radius: 7px;
-    border: 1px solid var(--line); background: rgba(255,255,255,0.03);
-    color: var(--text-dim); text-align: center; white-space: nowrap;
-  }
-  .mstep.active { border-color: var(--accent); color: var(--accent); background: rgba(255,255,255,0.09); }
-
-  #warning {
-    position: absolute; top: 61px; left: 50%; transform: translateX(-50%); z-index: 2;
-    background: rgba(209,101,101,0.15);
-    border: 1px solid var(--danger);
-    color: #f0b8b8;
-    font-size: 12px; text-align: center;
-    padding: 8px 14px; border-radius: 8px;
-    max-width: calc(100% - 32px);
-    display: none;
-  }
 
   /* ---------- PANTALLA DE INICIO ---------- */
   #importScreen {
@@ -326,58 +177,6 @@
   .is-mobile #importVideoWrap { display: none; }
   .is-mobile .import-split { gap: 0; }
 
-  /* ---------- BIBLIOTECA DE MOTIVOS ---------- */
-  #catalogScreen {
-    position: absolute; inset: 0; z-index: 11;
-    background: rgba(0,0,0,0.72);
-    display: none; align-items: center; justify-content: center;
-    padding: 20px;
-  }
-  #catalogScreen .card {
-    background: var(--panel); border: 1px solid var(--line);
-    border-radius: 14px; padding: 22px; width: 560px; max-width: 100%;
-    max-height: 86vh; display: flex; flex-direction: column;
-  }
-  #catalogScreen h2 { font-size: 16px; margin: 0 0 4px; }
-  #catalogScreen .subtitle { font-size: 12px; color: var(--text-dim); margin: 0 0 16px; }
-  #catalogGrid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-    gap: 10px; overflow-y: auto; padding: 2px;
-  }
-  .motif {
-    border: 1px solid var(--line); border-radius: 10px; padding: 8px;
-    background: rgba(255,255,255,0.03); cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    aspect-ratio: 1 / 1;
-  }
-  .motif:hover, .motif:focus-visible { border-color: var(--accent); }
-  .motif img { width: 100%; height: 100%; object-fit: contain; }
-  #catalogStatus { font-size: 12px; color: var(--text-dim); min-height: 16px; margin-top: 12px; }
-  #catalogStatus.error { color: var(--danger); }
-  #catalogScreen .row { display: flex; justify-content: flex-end; margin-top: 12px; }
-
-  /* ---------- PANEL DE CALCO ---------- */
-  #tracePanel {
-    position: absolute; top: 150px; left: 20px; right: auto; z-index: 3;
-    width: 210px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 12px;
-    display: none;
-  }
-  #tracePanel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 8px; }
-  .ref-hint { font-size: 11px; color: var(--text-dim); line-height: 1.4; margin-bottom: 10px; }
-  .slider-label {
-    display: flex; justify-content: space-between;
-    font-size: 11px; color: var(--text-dim); margin: 10px 0 4px;
-  }
-  #tracePanel input[type=range] { width: 100%; accent-color: var(--accent); }
-  #tracePanel input[type=range]:disabled { opacity: .4; }
-  #btnTrace.svg-blocked { opacity: 0.45; cursor: not-allowed; }
-  .ref-row { display: flex; gap: 6px; margin-top: 12px; }
-  .ref-row button { flex: 1; font-size: 12px; padding: 8px 6px; }
-
   /* ---------- OVERLAY DE CARGA (Lottie) ---------- */
   #loadingOverlay {
     position: fixed; inset: 0; z-index: 50;
@@ -388,123 +187,11 @@
   #loadingOverlay .spinner { width: 84px; height: 84px; }
   #loadingOverlay .msg { font-size: 12px; color: var(--text-dim); letter-spacing: 0.02em; }
 
-  /* ---------- COMPUERTA DE TÉRMINOS Y CONDICIONES ---------- */
-  #termsGate {
-    position: fixed; inset: 0; z-index: 46;
-    background: var(--bg);
-    display: flex; align-items: center; justify-content: center;
-    padding: 20px;
-  }
-  #termsGate .card {
-    background: var(--panel); border: 1px solid var(--line);
-    border-radius: 14px; padding: 30px; width: 380px; max-width: 100%; text-align: center;
-  }
-  #termsGate h2 { font-size: 16px; margin: 0 0 10px; }
-  #termsGate p { font-size: 12px; color: var(--text-dim); line-height: 1.55; margin: 0 0 16px; }
-  #termsGate a { color: var(--text); }
-  #termsGate label {
-    display: flex; align-items: flex-start; gap: 8px; text-align: left;
-    font-size: 12px; color: var(--text-dim); margin-bottom: 18px; cursor: pointer;
-  }
-  #termsGate input[type=checkbox] { margin-top: 2px; accent-color: var(--accent); }
-
-  /* ---------- BUSCADOR DEL CATÁLOGO ---------- */
-  #catalogSearch {
-    width: 100%; font-family: inherit; font-size: 13px;
-    background: rgba(255,255,255,0.04); color: var(--text);
-    border: 1px solid var(--line); border-radius: 8px;
-    padding: 9px 12px; margin-bottom: 12px;
-  }
-  #catalogSearch:focus { outline: 1px solid var(--accent); }
-
-  /* ---------- PANEL DE ESCALA (solo móvil) ---------- */
-  #mobileScalePanel {
-    position: absolute; top: 56px; right: 16px; z-index: 5;
-    width: 190px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 12px;
-    display: none;
-  }
-  #mobileScalePanel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 8px; }
-  #mobileScalePanel input[type=range] { width: 100%; accent-color: var(--accent); }
-
-  /* ---------- PANEL DE TUTORIAL (video) ----------
-     Se abre con "Ver tutorial" en el modo de dibujo: aparece a la izquierda y
-     encoge el espacio de trabajo. Tiene controles nativos del <video> para
-     reproducir y avanzar. Solo en escritorio. */
-  #tutorialPanel {
-    position: absolute; top: 56px; left: 16px; z-index: 4;
-    width: 340px; max-width: calc(100vw - 32px);
-    background: var(--panel); border: 1px solid var(--line);
-    border-radius: 10px; padding: 10px;
-    display: none;
-  }
-  #tutorialPanel.open { display: block; }
-  .tut-head { display: flex; justify-content: flex-end; margin-bottom: 8px; }
-  #btnTutClose { font-size: 12px; color: var(--text-dim); background: none; border: none; cursor: pointer; }
-  #btnTutClose:hover { color: var(--text); }
-  #tutVideo { width: 100%; display: block; border-radius: 6px; background: #000; }
-  .is-mobile #tutorialPanel { display: none !important; }
-
-  /* ---------- TUTORIAL EN PANTALLA DIVIDIDA (PC / modo dibujo) ----------
-     Al abrir el tutorial en escritorio la pantalla se divide: el primer tercio
-     (izquierda) es el video en loop y los dos tercios restantes el área de
-     dibujo 2D. Al cerrar (html.tutorial-open retirado) la zona del tutorial se
-     colapsa y el área de trabajo vuelve a ocuparse por completo. */
-  html:not(.is-mobile).tutorial-open #tutorialPanel {
-    position: fixed; left: 0; top: 0; bottom: 0;
-    width: calc(100vw / 3); max-width: none;
-    display: flex; flex-direction: column;
-    background: #000; border: none; border-radius: 0;
-    padding: 10px; z-index: 8;
-  }
-  html:not(.is-mobile).tutorial-open #tutorialPanel .tut-head {
-    flex: none; display: flex; justify-content: flex-end; margin-bottom: 8px;
-  }
-  html:not(.is-mobile).tutorial-open #tutVideo {
-    flex: 1; width: 100%; height: auto; min-height: 0;
-    border-radius: 0; object-fit: contain;
-  }
-  html:not(.is-mobile).tutorial-open #canvas { left: calc(100vw / 3); width: calc(200vw / 3); }
-  html:not(.is-mobile).tutorial-open #topbar { left: calc(100vw / 3); right: 0; }
-  html:not(.is-mobile).tutorial-open #readout { display: none !important; }
-  html:not(.is-mobile).tutorial-open #areaNotice { left: calc(200vw / 3); transform: translateX(-50%); }
-  html:not(.is-mobile).tutorial-open #warning { left: calc(200vw / 3); transform: translateX(-50%); }
-  html:not(.is-mobile).tutorial-open #mouseHelp { left: calc(200vw / 3); transform: translateX(-50%); }
-  html:not(.is-mobile).tutorial-open #stepper { left: calc(100vw / 3); right: 0; }
-  html:not(.is-mobile).tutorial-open #bgImage { left: calc(200vw / 3); transform: translate(-50%, -50%); }
-  html:not(.is-mobile).tutorial-open #tracePanel { left: calc(100vw / 3 + 20px); }
-
-  /* ---------- VENTANA DE AYUDA ----------
-     Se abre con el botón "?" del encabezado y solo cuando el usuario está en
-     el modo de dibujo (2D) o en la vista 3D. Repasa los atajos de mouse y
-     teclado sin depender de los globos de la visita. */
-  #helpModal {
-    position: fixed; inset: 0; z-index: 47;
-    background: var(--bg);
-    display: none; align-items: center; justify-content: center;
-    padding: 20px;
-  }
-  #helpModal .card {
-    background: var(--panel); border: 1px solid var(--line);
-    border-radius: 14px; padding: 26px; width: 420px; max-width: 100%;
-  }
-  #helpModal h2 { font-size: 15px; margin: 0 0 14px; }
-  .help-body { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
-  .help-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; font-size: 12px; color: var(--text-dim); }
-  .help-kbd {
-    flex: none; background: rgba(255,255,255,0.06); border: 1px solid var(--line);
-    border-radius: 5px; padding: 4px 8px; font-family: "SFMono-Regular", Menlo, Consolas, monospace;
-    font-size: 11px; color: var(--text); white-space: nowrap;
-  }
-
   /* ---------- GLOBOS DE AYUDA ----------
      Un letrero a la vez, anclado al control del que habla, y solo cuando ese
      control ya está en pantalla y no hay nada encima (prelude, términos o
      carga). Se cierran con la ✕ o con "Entendido"; "No mostrar más" los apaga
-     hasta la próxima sesión, y el botón "?" del encabezado los reactiva. */
+     hasta la próxima sesión. */
   #tourLayer { position: fixed; inset: 0; z-index: 45; pointer-events: none; }
   .tour-tip {
     position: absolute; width: 250px; max-width: calc(100vw - 24px);
@@ -523,81 +210,6 @@
   .tour-tip .tour-close:hover { color: var(--text); background: none; }
   .tour-tip .tour-skip { font-size: 11px; color: var(--text-dim); padding: 6px 0; }
   .tour-tip .tour-ok { font-size: 12px; padding: 7px 14px; }
-
-  /* ---------- PANTALLAS ANGOSTAS (también escritorio) ---------- */
-  @media (max-width: 720px) {
-    #topbar { padding: 10px 14px; }
-    #topbar h1 { font-size: 13px; }
-    #hint { display: none; }
-    #readout { top: 92px; left: 14px; font-size: 11px; max-width: calc(100% - 28px); }
-    #areaNotice { top: 76px; left: 50%; }
-    #stepper { gap: 14px; padding: 12px 0; }
-    .step-label { font-size: 10px; }
-    #tracePanel { top: auto; bottom: 150px; right: 12px; left: 12px; width: auto; }
-
-    /* El panel de dibujar se vuelve un panel lateral colapsable "hacia un costado". */
-    #drawPanelWrap {
-      position: absolute; bottom: 56px; right: 0; left: auto; top: auto; transform: none; z-index: 3;
-      display: flex; align-items: center; gap: 6px;
-      transition: transform .25s ease;
-    }
-    /* Se deja siempre la pestaña visible: colapsar no puede dejar los
-       controles fuera de pantalla sin forma de recuperarlos. */
-    #drawPanelWrap.collapsed { transform: translateX(calc(100% - 30px)); }
-    #drawPanelToggle {
-      width: 30px; height: 40px; flex: none; padding: 0;
-      display: flex; align-items: center; justify-content: center;
-      background: var(--panel); border: 1px solid var(--line);
-      border-radius: 8px 0 0 8px; color: var(--text); font-size: 15px; cursor: pointer;
-    }
-    #drawPanel {
-      width: auto; min-width: 160px;
-      border-radius: 0 10px 10px 0; padding: 8px;
-    }
-  }
-  @media (min-width: 721px) {
-    #drawPanelToggle { display: none; }
-  }
-
-  /* ---------- LAYOUT DE CELULAR ----------
-     Solo cuando el editor está de verdad en modo móvil (pantalla pequeña +
-     táctil). Arriba: pasos. Abajo: escala. Nada más compite por el espacio,
-     así que ninguna barra tapa a otra.
-
-     La barra de pasos baja lo suficiente para que, incrustado el sitio en
-     otra página, el encabezado del contenedor padre no la pise. */
-  .is-mobile #topbar { padding: calc(10px + env(safe-area-inset-top)) 14px 10px; }
-  .is-mobile #topbar h1 { font-size: 13px; }
-  .is-mobile #hint { display: none; }
-
-  .is-mobile #stepper { display: none; }
-  .is-mobile #mobileSteps {
-    position: absolute; top: calc(84px + env(safe-area-inset-top)); left: 10px; right: 10px; z-index: 6;
-    display: flex; gap: 6px;
-    background: rgba(22,22,22,0.94);
-    border: 1px solid var(--line); border-radius: 10px; padding: 5px;
-    backdrop-filter: blur(6px);
-  }
-
-  /* Dibujar y calcar son de escritorio: sus barras no existen en el celular. */
-  .is-mobile #drawPanelWrap { display: none !important; }
-  .is-mobile #tracePanel { display: none !important; }
-  .is-mobile #areaNotice { display: none; }
-
-  /* Los avisos van debajo de la barra de pasos, nunca encima de ella. */
-  .is-mobile #readout { top: calc(138px + env(safe-area-inset-top)); left: 14px; font-size: 11px; max-width: calc(100% - 28px); }
-  .is-mobile #warning { top: calc(138px + env(safe-area-inset-top)); }
-
-  /* La escala es la única barra inferior: a lo ancho y anclada a la pantalla. */
-  .is-mobile #mobileScalePanel {
-    position: fixed; top: auto; bottom: 0; left: 0; right: 0; width: auto; z-index: 6;
-    border-radius: 12px 12px 0 0;
-    border-left: none; border-right: none; border-bottom: none;
-    background: rgba(22,22,22,0.96);
-    backdrop-filter: blur(6px);
-    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
-  }
-  .is-mobile #mobileScalePanel .ref-row button { font-size: 12px; padding: 11px 6px; }
 </style>
 </head>
 <body>
@@ -605,18 +217,9 @@
 <div id="prelude"><img id="preludeLogo" alt=""></div>
 <script>
   /* El prelude se muestra una sola vez por sesión. Si el usuario ya lo vio
-     (por ejemplo al volver desde la vista 3D), se retira antes del primer
+     (por ejemplo al volver desde el editor 2D), se retira antes del primer
      pintado para que no haya parpadeo. */
   (function () {
-    /* Detecta si la app corre dentro de un iframe (p. ej. incrustada en otra
-       web). En ese caso se reserva el alto del header de la web contenedora
-       (70px en PC) para que ningún elemento de la app quede oculto ni se
-       corte el área inferior. */
-    try {
-      if (window.self !== window.top) {
-        document.documentElement.classList.add('embedded');
-      }
-    } catch (e) {}
     var seen = false;
     try { seen = sessionStorage.getItem('topitos-prelude-shown') === '1'; } catch (e) {}
     if (seen) {
@@ -630,94 +233,6 @@
 
 <div id="app">
   <img id="bgImage" alt="">
-  <canvas id="canvas" resize></canvas>
-
-  <div id="topbar">
-    <div class="topbar-left">
-      <h1>Topitos — dibuja tu figura</h1>
-      <button id="langBtn" type="button" title="Idioma / Language">EN</button>
-    </div>
-    <div class="topbar-right">
-      <div id="hint" data-i18n="hint">rueda: zoom · clic derecho sostenido: paneo</div>
-      <button id="btnHelp" type="button" title="Ver las ayudas otra vez" aria-label="Ver las ayudas otra vez">?</button>
-    </div>
-  </div>
-
-  <div id="mobileSteps" role="group" aria-label="Pasos">
-    <button type="button" class="mstep active" id="mstepImport"><span data-i18n="mstep-import">1 · Importar</span></button>
-    <button type="button" class="mstep" id="mstepScale"><span data-i18n="mstep-scale">2 · Escalar</span></button>
-    <button type="button" class="mstep" id="mstepExtrude"><span data-i18n="mstep-extrude">3 · Ver en 3D</span></button>
-  </div>
-
-  <div id="readout"></div>
-  <div id="areaNotice"><span data-i18n="areaNotice">Área máxima de trabajo: 1 × 1&nbsp;Centímetros</span></div>
-  <div id="warning"></div>
-
-  <div id="tracePanel">
-    <h2 data-i18n="traceTitle">Imagen de calco</h2>
-    <div class="ref-hint" id="traceHint">Arrastra la imagen para moverla. Ajústala y bloquéala para dibujar encima.</div>
-
-    <div class="slider-label"><span data-i18n="opacity">Opacidad</span><span id="traceOpacityVal">35%</span></div>
-    <input id="traceOpacity" type="range" min="10" max="80" value="35">
-
-    <div class="slider-label"><span data-i18n="scale">Escala</span><span id="traceScaleVal">100%</span></div>
-    <input id="traceScale" type="range" min="20" max="400" value="100">
-
-    <div class="slider-label"><span data-i18n="rotation">Rotación</span><span id="traceRotVal">0°</span></div>
-    <input id="traceRot" type="range" min="-180" max="180" value="0">
-
-    <div class="ref-row">
-      <button id="btnTraceLock" class="primary" data-i18n="lock">Bloquear</button>
-      <button id="btnTraceRemove" class="danger" data-i18n="remove">Quitar</button>
-    </div>
-  </div>
-
-  <div id="mobileScalePanel">
-    <h2 data-i18n="mobileScaleTitle">Tamaño del motivo</h2>
-    <div class="slider-label"><span data-i18n="scale">Escala</span><span id="mobileScaleVal">100%</span></div>
-    <input id="mobileScaleSlider" type="range" min="50" max="250" value="100">
-    <div class="ref-row">
-      <button id="btnMobileBack" class="danger" data-i18n="backOther">‹ Otro motivo</button>
-      <button id="btnMobileAdvance" class="primary" data-i18n="view3d">Ver en 3D ›</button>
-    </div>
-  </div>
-
-  <div id="drawPanelWrap">
-    <button id="drawPanelToggle" type="button" aria-label="Mostrar u ocultar controles">‹</button>
-    <div id="drawPanel">
-      <div class="block">
-        <h2 data-i18n="scaleTitle">Escala</h2>
-        <div class="slider-label"><span data-i18n="scale">Escala</span><span id="desktopScaleVal">100%</span></div>
-        <input id="desktopScaleSlider" type="range" min="50" max="250" value="100">
-      </div>
-      <div class="block">
-        <h2 data-i18n="controls">Controles</h2>
-        <button id="btnUndo" disabled title="Deshacer (Ctrl+Z)" aria-label="Deshacer"><span class="undo-icon">↶</span><span class="undo-label" data-i18n="undo">Deshacer</span></button>
-        <button id="btnRedo" disabled title="Rehacer (Ctrl+Y)" aria-label="Rehacer"><span class="undo-icon">↷</span><span class="undo-label" data-i18n="redo">Rehacer</span></button>
-        <button id="btnTrace" data-i18n="traceBtn">Calcar imagen</button>
-        <button id="btnSmooth" disabled data-i18n="smoothBtn">Suavizar trazo</button>
-        <button id="btnNodeEdit" disabled data-i18n="nodeEditBtn">Editar dibujo</button>
-        <button id="btnMove" disabled data-i18n="moveBtn">Mover diseño</button>
-        <button id="btnTutorial" data-i18n="tutorialBtn">Ver tutorial</button>
-      </div>
-      <div class="block">
-        <button id="btnReset" class="danger" style="width:100%" data-i18n="resetBtn">Reiniciar</button>
-        <button id="btnAccept" class="primary" disabled style="width:100%;margin-top:6px" data-i18n="acceptBtn">Aceptar diseño</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="stepper">
-    <button type="button" class="step active" id="stepImport"><div class="step-dot"></div><div class="step-label" data-i18n="stepImport">1 · Importar</div></button>
-    <button type="button" class="step" id="stepDraw"><div class="step-dot"></div><div class="step-label" data-i18n="stepDraw">2 · Dibujar</div></button>
-    <button type="button" class="step" id="stepExtrude"><div class="step-dot"></div><div class="step-label" data-i18n="stepExtrude">3 · Ver en 3D</div></button>
-  </div>
-
-  <div id="mouseHelp">
-    <div class="mh-item"><span class="mouse-ico" aria-hidden="true"></span><span data-i18n="mhDraw">Clic: dibujar</span></div>
-    <div class="mh-item"><span class="mh-right" aria-hidden="true"></span><span data-i18n="mhRight">Derecho + arrastrar: paneo</span></div>
-    <div class="mh-item"><span class="mh-wheel" aria-hidden="true"></span><span data-i18n="mhWheel">Rueda: zoom</span></div>
-  </div>
 
   <div id="importScreen">
     <div class="import-split">
@@ -735,17 +250,6 @@
         </div>
         <div id="importStatus"></div>
       </div>
-    </div>
-  </div>
-
-  <div id="catalogScreen">
-    <div class="card">
-      <h2 data-i18n="catalogTitle">Biblioteca de motivos</h2>
-      <p class="subtitle" data-i18n="catalogSubtitle">Elige un motivo. Podrás editar sus nodos, suavizarlo o aceptarlo directamente.</p>
-      <input type="text" id="catalogSearch" placeholder="Buscar por etiqueta…">
-      <div id="catalogGrid"></div>
-      <div id="catalogStatus">Cargando motivos…</div>
-      <div class="row"><button id="btnCatalogClose" data-i18n="closeBtn">Cerrar</button></div>
     </div>
   </div>
 
@@ -770,276 +274,66 @@
     <div class="msg" id="loadingMsg">Cargando…</div>
   </div>
 
-  <div id="helpModal">
-    <div class="card">
-      <h2 data-i18n="help">Ayuda</h2>
-      <div class="help-body">
-        <div class="help-row"><span class="help-kbd" data-i18n="helpWheel">Rueda del mouse</span><span data-i18n="helpWheelText">Acerca o aleja el zoom</span></div>
-        <div class="help-row"><span class="help-kbd" data-i18n="helpDrag">Clic + arrastrar</span><span data-i18n="helpDragText">Dibuja la figura o mueve el diseño</span></div>
-        <div class="help-row"><span class="help-kbd" data-i18n="helpRight">Clic derecho sostenido</span><span data-i18n="helpRightText">Panea sobre el lienzo</span></div>
-        <div class="help-row"><span class="help-kbd" data-i18n="helpUndoShort">Ctrl + Z</span><span data-i18n="helpUndoText">Deshacer</span></div>
-        <div class="help-row"><span class="help-kbd" data-i18n="helpRedoShort">Ctrl + Y</span><span data-i18n="helpRedoText">Rehacer</span></div>
-      </div>
-      <div class="row"><button id="btnHelpClose" class="primary" style="width:100%" data-i18n="helpClose">Cerrar</button></div>
-    </div>
-  </div>
-
-  <div id="tutorialPanel">
-    <div class="tut-head">
-      <button id="btnTutClose" type="button" aria-label="Cerrar tutorial" data-i18n="closeTut">✕ Cerrar</button>
-    </div>
-    <video id="tutVideo" controls playsinline preload="metadata" loop></video>
-  </div>
-
   <div id="tourLayer"></div>
 </div>
 
-<input type="file" id="traceInput" accept="image/*" hidden>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-full.min.js"></script>
 <script>
 /* ============================================================
-   CONFIGURACIÓN — todas las unidades de "paper" son mm reales,
-   así que cualquier distancia en project-space ya está en mm,
-   sin importar el nivel de zoom. Esto es lo que permite que el
-   usuario se acerque a detallar sin romper la validación de
-   cierre (0.2mm) o de puentes (1mm).
+   CONFIGURACIÓN
    ============================================================ */
-const SQUARE_MM = 10;
-const CLOSE_THRESHOLD_MM = 0.2;
-const MIN_ZOOM = 8;
-const MAX_ZOOM = 400;
-
-/* Tolerancia de desborde: por debajo de esto la diferencia no es real, es
-   ruido de coma flotante del escalado. */
-const AREA_TOLERANCE_MM = 0.02;
-
 const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbyeFmWfHaxAlFcSrEE0dPK71eNbMomJ4KRtkFe-uRX0NruGBsSL8Sz2rQ-XGactrjYu/exec';
-const DESIGN_KEY = 'topitos-design';
-const TRACE_KEY = 'topitos-trace';
+const FILE_IMPORT_KEY = 'topitos-file-import';
 const TERMS_KEY = 'topitos-terms-accepted';
 const LANG_KEY = 'topitos-lang';
 const $ = id => document.getElementById(id);
 
 /* ============================================================
-   IDIOMA — selector en la esquina superior izquierda y tablas de
-   traducción ES/EN. La interfaz base está escrita en español; al
+   IDIOMA — selector en la compuerta de términos (arriba a la
+   derecha, ES/EN). La interfaz base está escrita en español; al
    cambiar de idioma se recorren los nodos marcados con
-   [data-i18n="clave"] y las cadenas dinámicas del JS usan t().
+   [data-i18n="clave"].
    ============================================================ */
 const I18N = {
   es: {
-    topTitle: 'Topitos — dibuja tu figura',
-    hint: 'rueda: zoom · clic derecho sostenido: paneo',
-    help: 'Ver las ayudas otra vez',
-    stepImport: '1 · Importar',
-    stepDraw: '2 · Dibujar',
-    stepExtrude: '3 · Ver en 3D',
-    mobileStepsLabel: 'Pasos',
-    'mstep-import': '1 · Importar',
-    'mstep-scale': '2 · Escalar',
-    'mstep-extrude': '3 · Ver en 3D',
-    areaNotice: 'Área máxima de trabajo: 1 × 1 Centímetros',
-    traceTitle: 'Imagen de calco',
-    traceHint: 'Arrastra la imagen para moverla. Ajústala y bloquéala para dibujar encima.',
-    traceHintLocked: 'Imagen bloqueada. Ya puedes dibujar encima; la opacidad sigue siendo ajustable.',
-    opacity: 'Opacidad',
-    scale: 'Escala',
-    rotation: 'Rotación',
-    lock: 'Bloquear',
-    unlock: 'Desbloquear',
-    remove: 'Quitar',
-    mobileScaleTitle: 'Tamaño del motivo',
-    backOther: '‹ Otro motivo',
-    view3d: 'Ver en 3D ›',
-    drawControlsHide: 'Mostrar u ocultar controles',
-    scaleTitle: 'Escala',
-    controls: 'Controles',
-    undo: 'Deshacer',
-    redo: 'Rehacer',
-    undoTitle: 'Deshacer (Ctrl+Z)',
-    redoTitle: 'Rehacer (Ctrl+Y)',
-    traceBtn: 'Calcar imagen',
-    smoothBtn: 'Suavizar trazo',
-    nodeEditBtn: 'Editar dibujo',
-    moveBtn: 'Mover diseño',
-    resetBtn: 'Reiniciar',
-    acceptBtn: 'Aceptar diseño',
     importTitle: 'Empieza el diseño de tus topitos seleccionando una de éstas opciones',
     uploadBtn: 'Subir archivo',
     catalogBtn: 'Elegir un motivo',
     skipImportBtn: 'Dibujar a mano',
-    catalogTitle: 'Biblioteca de motivos',
-    catalogSubtitle: 'Elige un motivo. Podrás editar sus nodos, suavizarlo o aceptarlo directamente.',
-    catalogSearchPlaceholder: 'Buscar por etiqueta…',
-    catalogLoading: 'Cargando motivos…',
-    closeBtn: 'Cerrar',
+    importMobileHint: 'Si quieres calcar tu propia imagen o diseñar desde cero debes hacerlo desde un computador.',
     termsTitle: 'Antes de empezar',
     termsBody: 'Diseñar tus Topitos implica aceptar nuestras condiciones comerciales (tiempos de entrega, pagos y garantía).',
     termsCheck: 'He leído y acepto los {a}términos y condiciones{/a}.',
     termsAccept: 'Aceptar y continuar',
     loading: 'Cargando…',
-    tourClose: 'Cerrar',
-    tourNoMore: 'No mostrar más',
-    tourOk: 'Entendido',
-    flashClosed: 'Figura cerrada. Suaviza el trazo, edita nodos o acepta cuando esté lista.',
-    flashCloseBeforeAccept: 'Cierra el contorno antes de aceptar.',
-    flashSelfIntersect: 'La curva se cruza a sí misma — corrige la intersección antes de continuar.',
-    flashOutOfBounds: 'La figura se sale del área de 1 × 1 cm — reduce su tamaño para continuar.',
-    flashRestored: 'Diseño recuperado. Puedes seguir editándolo.',
-    flashTraceLoaded: 'Trazo cargado. Suavízalo, edita nodos o acepta el diseño.',
-    flashChooseMotif: 'Elige un motivo antes de continuar.',
-    flashCloseBefore3d: 'Cierra el contorno antes de pasar a la vista 3D.',
-    flashChooseFirst: 'Elige primero un motivo de la biblioteca.',
-    warnSelfIntersect: 'La curva se cruza a sí misma — corrige la intersección para continuar.',
-    warnOutOfBounds: 'La figura se sale del área de 1 × 1 cm — reduce el tamaño para continuar.',
-    importLoading: 'Cargando…',
     importProcessing: 'Procesando archivo…',
     importPdf: 'La importación de PDF todavía no está lista. Conviértelo a SVG, o usa la imagen como calco en el siguiente paso.',
     importUnknown: 'Formato no reconocido — usa SVG o DXF.',
     importReadFailed: 'No se pudo leer el archivo: ',
-    traceSvgBlocked: 'Al diseñar a partir de un SVG no se usa la función de calcar imagen.',
-    catalogStatusLoading: 'Cargando motivos…',
-    catalogStatusEmpty: 'Todavía no hay motivos en la biblioteca. Agrégalos en la hoja "SVG CATALOG".',
-    catalogStatusNoMatch: 'No hay motivos con esa etiqueta.',
-    catalogMotifLoading: 'Cargando motivo…',
-    catalogLoadFail: 'No se pudo cargar ese motivo: ',
-    motifPrefix: 'Motivo ',
-    importMobileHint: 'Si quieres calcar tu propia imagen o diseñar desde cero debes hacerlo desde un computador.',
-    tourCatalog: 'Busca por etiqueta y toca el motivo que quieras: se carga de una vez en el área de trabajo.',
-    tourStartMobile: 'Empieza aquí: elige un motivo de la biblioteca para tu Topito.',
-    tourSteps: 'Con estos tres botones te mueves entre importar el motivo, ajustar su tamaño y verlo en 3D.',
+    tourNoMore: 'No mostrar más',
+    tourOk: 'Entendido',
     tourStart: 'Empieza aquí: sube tu archivo, elige un motivo de la biblioteca o dibuja tu figura a mano.',
-    tourScale: 'Ajusta el tamaño con esta barra. El cuadro de la pantalla es el área real de 1 × 1 cm: si la figura se sale, no podrás continuar.',
-    tourView3d: 'Cuando te guste, toca "Ver en 3D" para elegir el acabado y confirmar tu pedido.',
-    tourDraw: 'Cierra la figura volviendo al primer punto. Después puedes suavizar el trazo, editar nodos y aceptar el diseño.',
-    help: 'Ayuda',
-    helpWheel: 'Rueda del mouse',
-    helpWheelText: 'Acerca o aleja el zoom',
-    helpDrag: 'Clic + arrastrar',
-    helpDragText: 'Dibuja la figura o mueve el diseño',
-    helpRight: 'Clic derecho sostenido',
-    helpRightText: 'Panea sobre el lienzo',
-    helpUndoShort: 'Ctrl + Z',
-    helpUndoText: 'Deshacer',
-    helpRedoShort: 'Ctrl + Y',
-    helpRedoText: 'Rehacer',
-    helpClose: 'Cerrar',
-    mhDraw: 'Clic: dibujar',
-    mhRight: 'Derecho + arrastrar: paneo',
-    mhWheel: 'Rueda: zoom',
-    active: 'activo',
-    tutorialBtn: 'Ver tutorial',
-    closeTut: '✕ Cerrar',
-    tutNoVideo: 'Pronto verás un tutorial aquí.',
-    tutCloseBtn: 'Cerrar tutorial',
+    tourStartMobile: 'Empieza aquí: elige un motivo de la biblioteca para tu Topito.',
   },
   en: {
-    topTitle: 'Topitos — design your figure',
-    hint: 'wheel: zoom · hold right-click: pan',
-    help: 'See the help again',
-    stepImport: '1 · Import',
-    stepDraw: '2 · Draw',
-    stepExtrude: '3 · View in 3D',
-    mobileStepsLabel: 'Steps',
-    'mstep-import': '1 · Import',
-    'mstep-scale': '2 · Scale',
-    'mstep-extrude': '3 · View in 3D',
-    areaNotice: 'Maximum work area: 1 × 1 Centimeters',
-    traceTitle: 'Trace image',
-    traceHint: 'Drag the image to move it. Adjust it and lock it to draw on top.',
-    traceHintLocked: 'Image locked. You can now draw on top; opacity is still adjustable.',
-    opacity: 'Opacity',
-    scale: 'Scale',
-    rotation: 'Rotation',
-    lock: 'Lock',
-    unlock: 'Unlock',
-    remove: 'Remove',
-    mobileScaleTitle: 'Motif size',
-    backOther: '‹ Another motif',
-    view3d: 'View in 3D ›',
-    drawControlsHide: 'Show or hide controls',
-    scaleTitle: 'Scale',
-    controls: 'Controls',
-    undo: 'Undo',
-    redo: 'Redo',
-    undoTitle: 'Undo (Ctrl+Z)',
-    redoTitle: 'Redo (Ctrl+Y)',
-    traceBtn: 'Trace image',
-    smoothBtn: 'Smooth stroke',
-    nodeEditBtn: 'Edit drawing',
-    moveBtn: 'Move design',
-    resetBtn: 'Reset',
-    acceptBtn: 'Accept design',
     importTitle: 'Start designing your topitos by selecting one of these options',
     uploadBtn: 'Upload file',
     catalogBtn: 'Choose a motif',
     skipImportBtn: 'Draw by hand',
-    catalogTitle: 'Motif library',
-    catalogSubtitle: 'Choose a motif. You can edit its nodes, smooth it or accept it directly.',
-    catalogSearchPlaceholder: 'Search by tag…',
-    catalogLoading: 'Loading motifs…',
-    closeBtn: 'Close',
+    importMobileHint: 'If you want to trace your own image or design from scratch you must do it from a computer.',
     termsTitle: 'Before you start',
     termsBody: 'Designing your Topitos means accepting our commercial conditions (delivery times, payments and warranty).',
     termsCheck: 'I have read and accept the {a}terms and conditions{/a}.',
     termsAccept: 'Accept and continue',
     loading: 'Loading…',
-    tourClose: 'Close',
-    tourNoMore: 'Don\'t show again',
-    tourOk: 'Got it',
-    flashClosed: 'Figure closed. Smooth the stroke, edit nodes or accept when it is ready.',
-    flashCloseBeforeAccept: 'Close the outline before accepting.',
-    flashSelfIntersect: 'The curve crosses itself — fix the intersection before continuing.',
-    flashOutOfBounds: 'The figure goes outside the 1 × 1 cm area — reduce its size to continue.',
-    flashRestored: 'Design recovered. You can keep editing it.',
-    flashTraceLoaded: 'Stroke loaded. Smooth it, edit nodes or accept the design.',
-    flashChooseMotif: 'Choose a motif before continuing.',
-    flashCloseBefore3d: 'Close the outline before going to the 3D view.',
-    flashChooseFirst: 'Choose a motif from the library first.',
-    warnSelfIntersect: 'The curve crosses itself — fix the intersection to continue.',
-    warnOutOfBounds: 'The figure goes outside the 1 × 1 cm area — reduce its size to continue.',
-    importLoading: 'Loading…',
     importProcessing: 'Processing file…',
     importPdf: 'PDF import is not ready yet. Convert it to SVG, or use the image as a trace in the next step.',
     importUnknown: 'Unrecognized format — use SVG or DXF.',
     importReadFailed: 'Could not read the file: ',
-    traceSvgBlocked: 'Tracing images is not used when designing from an SVG.',
-    catalogStatusLoading: 'Loading motifs…',
-    catalogStatusEmpty: 'There are no motifs in the library yet. Add them in the "SVG CATALOG" sheet.',
-    catalogStatusNoMatch: 'There are no motifs with that tag.',
-    catalogMotifLoading: 'Loading motif…',
-    catalogLoadFail: 'Could not load that motif: ',
-    motifPrefix: 'Motif ',
-    importMobileHint: 'If you want to trace your own image or design from scratch you must do it from a computer.',
-    tourCatalog: 'Search by tag and tap the motif you want: it loads right into the work area.',
-    tourStartMobile: 'Start here: choose a motif from the library for your Topito.',
-    tourSteps: 'These three buttons move you between importing the motif, adjusting its size and viewing it in 3D.',
+    tourNoMore: 'Don\'t show again',
+    tourOk: 'Got it',
     tourStart: 'Start here: upload your file, choose a motif from the library or draw your figure by hand.',
-    tourScale: 'Adjust the size with this bar. The box on screen is the real 1 × 1 cm area: if the figure goes out, you cannot continue.',
-    tourView3d: 'When you like it, tap "View in 3D" to choose the finish and confirm your order.',
-    tourDraw: 'Close the figure by returning to the first point. Then you can smooth the stroke, edit nodes and accept the design.',
-    help: 'Help',
-    helpWheel: 'Mouse wheel',
-    helpWheelText: 'Zoom in or out',
-    helpDrag: 'Click + drag',
-    helpDragText: 'Draw the figure or move the design',
-    helpRight: 'Hold right-click',
-    helpRightText: 'Pan across the canvas',
-    helpUndoShort: 'Ctrl + Z',
-    helpUndoText: 'Undo',
-    helpRedoShort: 'Ctrl + Y',
-    helpRedoText: 'Redo',
-    helpClose: 'Close',
-    mhDraw: 'Click: draw',
-    mhRight: 'Right + drag: pan',
-    mhWheel: 'Wheel: zoom',
-    active: 'active',
-    tutorialBtn: 'Watch tutorial',
-    closeTut: '✕ Close',
-    tutNoVideo: 'A tutorial will be available here soon.',
-    tutCloseBtn: 'Close tutorial',
+    tourStartMobile: 'Start here: choose a motif from the library for your Topito.',
   },
 };
 
@@ -1065,12 +359,8 @@ function applyLanguage() {
       }
     }
   });
-  const langBtn = $('langBtn');
-  if (langBtn) langBtn.textContent = currentLang === 'es' ? 'EN' : 'ES';
   const langStart = $('langStart');
   if (langStart) langStart.querySelectorAll('.ls-opt').forEach((b) => b.classList.toggle('active', b.dataset.lang === currentLang));
-  const h1 = document.querySelector('#topbar h1');
-  if (h1 && !h1.closest('[data-i18n]')) h1.textContent = table.topTitle;
   const importHint = $('importHint');
   if (importHint && isMobile) importHint.textContent = table.importMobileHint;
 }
@@ -1083,14 +373,8 @@ function setLanguage(lang) {
   applyLanguage();
 }
 
-/* Un solo punto de verdad para "es móvil", y es el mismo que decidió la clase
-   .is-mobile del <html> antes de pintar: así el layout y el comportamiento
-   nunca se contradicen. */
+/* Un solo punto de verdad para "es móvil": pantalla pequeña + puntero grueso. */
 const isMobile = document.documentElement.classList.contains('is-mobile');
-const mobileScalePanel = $('mobileScalePanel');
-const mobileScaleSlider = $('mobileScaleSlider');
-const MIN_MOBILE_SCALE = 50;   // por debajo de esto la pieza queda menor a 5 mm
-let mobileScaleFactor = 1;
 
 // Banderas de arranque: los globos de ayuda esperan a que no haya nada encima.
 let preludeDone = !!window.__preludeSeen;
@@ -1098,7 +382,7 @@ let termsDone = false;
 
 /* ============================================================
    OVERLAY DE CARGA — evita que el usuario insista con más clics
-   mientras algo tarda (config del spreadsheet, catálogo, DXF).
+   mientras el archivo se transfiere al editor.
    ============================================================ */
 const LOADING_LOTTIE_JSON = {
   v: '5.9.0', fr: 30, ip: 0, op: 90, w: 200, h: 200, nm: 'spinner', ddd: 0, assets: [],
@@ -1147,13 +431,9 @@ function hideLoading() {
 }
 
 /* ============================================================
-   GLOBOS DE AYUDA
-   Reglas duras:
-     · nunca por encima del prelude, de los términos o de la carga;
-     · nunca antes de que el control del que hablan esté en pantalla;
-     · uno a la vez, en cola, y el siguiente solo tras cerrar el anterior.
-   Si el control nunca aparece (porque el usuario tomó otro camino), el
-   letrero se descarta en silencio en vez de quedar esperando.
+   GLOBOS DE AYUDA — mismas reglas que en el editor: uno a la vez,
+   nunca por encima del prelude, de los términos o de la carga, y
+   solo cuando el control del que hablan ya está en pantalla.
    ============================================================ */
 const TOUR_KEY = 'topitos-tour-editor';
 const TOUR_OFF_KEY = TOUR_KEY + ':off';
@@ -1279,55 +559,15 @@ function renderTip(id, text, target) {
   });
 }
 
-/* Qué letreros corresponden según dónde está parado el usuario. */
+/* En esta pantalla solo hay un consejo: señalar el menú de inicio. El resto
+   de los letreros del recorrido viven en el editor 2D (Dibujar.html). */
 function tipsForStage() {
   if (tourOff) return;
-  const catalogEl = $('catalogScreen');
-  const importEl = $('importScreen');
-
-  if (catalogEl.style.display === 'flex') {
-    queueTips([{
-      id: 'catalogo',
-      text: t('tourCatalog'),
-      target: () => $('catalogSearch'),
-    }]);
-    return;
-  }
-
-  if (importEl.style.display !== 'none') {
-    if (isMobile) {
-      queueTips([
-        { id: 'inicio', text: t('tourStartMobile'), target: () => $('btnCatalog') },
-        { id: 'pasos', text: t('tourSteps'), target: () => $('mobileSteps') },
-      ]);
-    } else {
-      queueTips([
-        { id: 'inicio', text: t('tourStart'), target: () => $('btnCatalog') },
-      ]);
-    }
-    return;
-  }
-
-  if (isMobile) {
-    queueTips([
-      {
-        id: 'escala',
-        text: t('tourScale'),
-        target: () => (mobileScalePanel.style.display === 'none' ? null : mobileScaleSlider),
-      },
-      {
-        id: 'ver3d',
-        text: t('tourView3d'),
-        target: () => $('btnMobileAdvance'),
-      },
-    ]);
-  } else {
-    queueTips([{
-      id: 'dibujo',
-      text: t('tourDraw'),
-      target: () => $('drawPanel'),
-    }]);
-  }
+  queueTips([{
+    id: 'inicio',
+    text: t(isMobile ? 'tourStartMobile' : 'tourStart'),
+    target: () => $('btnCatalog'),
+  }]);
 }
 
 function maybeStartTour() {
@@ -1335,55 +575,62 @@ function maybeStartTour() {
   setTimeout(tipsForStage, 350);
 }
 
-/* Cambio de etapa: se descarta lo que estuviera pendiente y se arma la cola
-   del lugar nuevo — así ningún letrero llega tarde, hablando de una pantalla
-   que el usuario ya dejó atrás. */
 function refreshTipsForStage(delay) {
   closeTip();
   clearTipQueue();
   pumpTimer = setTimeout(tipsForStage, delay || 300);
 }
 
-/* La ayuda del "?" solo aplica en el modo de dibujo (2D) — en la pantalla de
-   inicio y en la biblioteca no hay atajos que explicar. Se considera "modo de
-   dibujo" a partir del momento en que el cliente acepta alguna de las
-   opciones iniciales (subir archivo, elegir motivo o dibujar a mano). */
-let drawModeEntered = false;
-function inDrawMode() {
-  return drawModeEntered && importScreen.style.display === 'none' && catalogScreen.style.display !== 'flex';
-}
-function updateHelpButton() {
-  $('btnHelp').style.display = inDrawMode() ? '' : 'none';
-}
-function openHelpModal() {
-  if (!inDrawMode()) return;
-  $('helpModal').style.display = 'flex';
-}
-function closeHelpModal() {
-  $('helpModal').style.display = 'none';
+/* ============================================================
+   MENÚ INICIAL — las tres opciones llevan al editor 2D
+   (Dibujar.html) con la intención con la que se quiere arrancar.
+   El archivo (SVG/DXF) se lee aquí —dentro del gesto del botón—
+   y se transfiere al editor por sessionStorage.
+   ============================================================ */
+const importScreen = $('importScreen');
+const importStatus = $('importStatus');
+const fileInput = $('fileInput');
+const bgImage = $('bgImage');
+
+function goToDraw(modo) {
+  window.location.href = 'Dibujar.html?modo=' + modo;
 }
 
-$('btnHelp').addEventListener('click', () => {
-  if (inDrawMode()) { openHelpModal(); return; }
-  tourSeen.clear();
-  saveTourSeen();
-  tourOff = false;
-  try { sessionStorage.removeItem(TOUR_OFF_KEY); } catch (e) {}
-  refreshTipsForStage(60);
-});
-$('btnHelpClose').addEventListener('click', closeHelpModal);
-$('helpModal').addEventListener('click', (e) => { if (e.target === $('helpModal')) closeHelpModal(); });
+$('btnCatalog').addEventListener('click', () => goToDraw('motivo'));
+$('btnSkipImport').addEventListener('click', () => goToDraw('mano'));
+$('btnUpload').addEventListener('click', () => fileInput.click());
 
-/* Selector de idioma, arriba a la izquierda: alterna ES/EN y refresca toda
-   la interfaz (nodos [data-i18n] y mensajes dinámicos vía t()). */
-$('langBtn').addEventListener('click', () => {
-  setLanguage(currentLang === 'es' ? 'en' : 'es');
-  if (termsDone) refreshTipsForStage(60);
+function setImportStatus(text, isError) {
+  importStatus.textContent = text;
+  importStatus.classList.toggle('error', !!isError);
+}
+
+fileInput.addEventListener('change', async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'pdf') { setImportStatus(t('importPdf'), true); return; }
+  if (ext !== 'svg' && ext !== 'dxf') { setImportStatus(t('importUnknown'), true); return; }
+
+  setImportStatus(t('importProcessing'), false);
+  showLoading(t('importProcessing'));
+  try {
+    const text = await file.text();
+    try {
+      sessionStorage.setItem(FILE_IMPORT_KEY, JSON.stringify({ ext, text, name: file.name }));
+    } catch (err) {
+      setImportStatus('El archivo es demasiado grande para transferirlo así. Usa un SVG o DXF más liviano.', true);
+      return;
+    }
+    window.location.href = 'Dibujar.html?modo=archivo';
+  } catch (err) {
+    console.error(err);
+    setImportStatus(t('importReadFailed') + err.message, true);
+  } finally {
+    hideLoading();
+    fileInput.value = '';
+  }
 });
-document.querySelectorAll('#langStart .ls-opt').forEach((b) => {
-  b.addEventListener('click', () => setLanguage(b.dataset.lang));
-});
-setLanguage(currentLang);
 
 /* ============================================================
    TÉRMINOS Y CONDICIONES — compuerta antes de tocar el editor.
@@ -1405,691 +652,12 @@ setLanguage(currentLang);
   });
 })();
 
-paper.setup('canvas');
-
-/* El encuadre inicial se calcula una sola vez. Antes se recalculaba en cada
-   "resize", lo que en móvil borraba el zoom del usuario cada vez que aparecía
-   el teclado o cambiaba la orientación. El atributo resize del canvas ya
-   mantiene la vista correcta al cambiar de tamaño. */
-function fitView() {
-  const targetPx = paper.view.viewSize.height * 0.62;
-  paper.view.zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, targetPx / (SQUARE_MM + 4)));
-  paper.view.center = new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2);
-}
-fitView();
-
-const gridLayer = new paper.Layer();
-function drawGrid() {
-  gridLayer.activate();
-  gridLayer.removeChildren();
-  for (let i = 0; i <= SQUARE_MM; i++) {
-    const v = new paper.Path.Line(new paper.Point(i, 0), new paper.Point(i, SQUARE_MM));
-    const h = new paper.Path.Line(new paper.Point(0, i), new paper.Point(SQUARE_MM, i));
-    [v, h].forEach(l => {
-      l.strokeColor = 'rgba(255,255,255,0.06)';
-      l.strokeWidth = 1;
-      l.strokeScaling = false;
-    });
-  }
-  const border = new paper.Path.Rectangle(new paper.Point(0, 0), new paper.Point(SQUARE_MM, SQUARE_MM));
-  border.strokeColor = '#6a6a6a';
-  border.strokeWidth = 1;
-  border.strokeScaling = false;
-
-  drawFixedDimensions();
-}
-
-/* Cotas fijas del área de trabajo: siempre 10x10mm, tanto si el usuario dibuja
-   a mano como si importa un archivo o un motivo — es el límite físico real de
-   la pieza, así que se dibuja una sola vez y nunca se borra ni se edita. */
-function drawFixedDimensions() {
-  const dimColor = '#8a8a8a';
-  const margin = 1;
-
-  function tickLine(from, to) {
-    const l = new paper.Path.Line(from, to);
-    l.strokeColor = dimColor;
-    l.strokeWidth = 1;
-    l.strokeScaling = false;
-    return l;
-  }
-
-  function dimLabel(point, text, rotation) {
-    const label = new paper.PointText(point);
-    label.justification = 'center';
-    label.fillColor = dimColor;
-    label.fontFamily = 'SFMono-Regular, Menlo, Consolas, monospace';
-    label.fontSize = 0.55;
-    label.content = text;
-    if (rotation) label.rotate(rotation, point);
-    return label;
-  }
-
-  // Cota inferior — ancho
-  tickLine(new paper.Point(0, SQUARE_MM + margin), new paper.Point(SQUARE_MM, SQUARE_MM + margin));
-  tickLine(new paper.Point(0, SQUARE_MM + margin - 0.3), new paper.Point(0, SQUARE_MM + margin + 0.3));
-  tickLine(new paper.Point(SQUARE_MM, SQUARE_MM + margin - 0.3), new paper.Point(SQUARE_MM, SQUARE_MM + margin + 0.3));
-  dimLabel(new paper.Point(SQUARE_MM / 2, SQUARE_MM + margin + 1), (SQUARE_MM / 10) + ' cm');
-
-  // Cota izquierda — alto
-  tickLine(new paper.Point(-margin, 0), new paper.Point(-margin, SQUARE_MM));
-  tickLine(new paper.Point(-margin - 0.3, 0), new paper.Point(-margin + 0.3, 0));
-  tickLine(new paper.Point(-margin - 0.3, SQUARE_MM), new paper.Point(-margin + 0.3, SQUARE_MM));
-  dimLabel(new paper.Point(-margin - 1, SQUARE_MM / 2), (SQUARE_MM / 10) + ' cm', -90);
-}
-drawGrid();
-
-/* La capa de calco va entre la grilla y el dibujo: la imagen tapa la grilla
-   pero nunca las líneas que el cliente está trazando. */
-const traceLayer = new paper.Layer();
-const drawLayer = new paper.Layer();
-drawLayer.activate();
-
 /* ============================================================
-   ESTADO
-   ============================================================ */
-let outerPath = null;
-let holePath = null;
-let mode = 'outer';       // 'outer' | 'review-outer'
-let nodeDragChanged = false;
-let drawingSegment = null;
-let dragOrigin = null;
-let isPanning = false;
-let nodeEditMode = false;
-let moveMode = false;
-let moveDragActive = false;
-let moveStart = null;
-let activeNodeHit = null;
-let insideOk = true;
-let noSelfIntersection = true;
-
-/* ============================================================
-   DESHACER / REHACER — pila de snapshots del path.
-   ============================================================ */
-const undoStack = [];
-const redoStack = [];
-const MAX_UNDO = 50;
-
-function snapshotPath(path) {
-  if (!path) return null;
-  return { segments: path.segments.map(s => [[s.point.x, s.point.y], [s.handleIn.x, s.handleIn.y], [s.handleOut.x, s.handleOut.y]]), closed: path.closed };
-}
-
-function restorePathData(data) {
-  if (!data) return null;
-  const p = newPath();
-  data.segments.forEach(s => {
-    p.add(new paper.Segment(new paper.Point(s[0][0], s[0][1]), new paper.Point(s[1][0], s[1][1]), new paper.Point(s[2][0], s[2][1])));
-  });
-  p.closed = !!data.closed;
-  return p;
-}
-
-function saveUndoState() {
-  undoStack.push({ outer: snapshotPath(outerPath), mode });
-  if (undoStack.length > MAX_UNDO) undoStack.shift();
-  redoStack.length = 0;
-  updateUndoRedoButtons();
-}
-
-function doUndo() {
-  if (!undoStack.length) return;
-  redoStack.push({ outer: snapshotPath(outerPath), mode });
-  const state = undoStack.pop();
-  if (outerPath) outerPath.remove();
-  outerPath = restorePathData(state.outer);
-  mode = state.mode;
-  updateUndoRedoButtons();
-  updateUIAfterStateChange();
-}
-
-function doRedo() {
-  if (!redoStack.length) return;
-  undoStack.push({ outer: snapshotPath(outerPath), mode });
-  const state = redoStack.pop();
-  if (outerPath) outerPath.remove();
-  outerPath = restorePathData(state.outer);
-  mode = state.mode;
-  updateUndoRedoButtons();
-  updateUIAfterStateChange();
-}
-
-function updateUndoRedoButtons() {
-  $('btnUndo').disabled = !undoStack.length;
-  $('btnRedo').disabled = !redoStack.length;
-}
-
-function updateUIAfterStateChange() {
-  const hasClosed = outerPath && outerPath.closed;
-  btnSmooth.disabled = !hasClosed;
-  btnNodeEdit.disabled = !hasClosed;
-  if (!isMobile) {
-    btnMove.disabled = !hasClosed;
-    if (!hasClosed) {
-      moveMode = false;
-      moveDragActive = false;
-      btnMove.classList.remove('active');
-      btnMove.textContent = t('moveBtn');
-      canvasEl.style.cursor = 'crosshair';
-    }
-  }
-  if (!hasClosed) {
-    nodeEditMode = false;
-    btnNodeEdit.classList.remove('active');
-    btnNodeEdit.textContent = t('nodeEditBtn');
-  }
-  if (outerPath) outerPath.fullySelected = nodeEditMode;
-  revalidateBridge();
-}
-
-let traceRaster = null;
-let traceLocked = false;
-let traceState = { x: SQUARE_MM / 2, y: SQUARE_MM / 2, scale: 1, rotation: 0, opacity: 0.35 };
-let traceSrc = null;
-let traceBlockedSvg = false;
-
-const readout = $('readout');
-const warning = $('warning');
-const btnTrace = $('btnTrace');
-const btnSmooth = $('btnSmooth');
-const btnNodeEdit = $('btnNodeEdit');
-const btnAccept = $('btnAccept');
-const btnReset = $('btnReset');
-const btnMove = $('btnMove');
-const bgImage = $('bgImage');
-const tracePanel = $('tracePanel');
-
-function newPath() {
-  const p = new paper.Path();
-  p.strokeColor = '#ececef';
-  p.strokeWidth = 1.5;
-  p.strokeScaling = false;
-  p.fillColor = null;
-  return p;
-}
-
-/* El área de trabajo es un límite duro: cualquier ancla se recorta
-   al cuadrado de SQUARE_MM x SQUARE_MM. Los manejadores de curva no
-   se recortan (son puntos de control, no parte del contorno visible). */
-function clampToSquare(point) {
-  return new paper.Point(
-    Math.min(SQUARE_MM, Math.max(0, point.x)),
-    Math.min(SQUARE_MM, Math.max(0, point.y))
-  );
-}
-
-/* Los enlaces normales de Drive (/file/d/ID/view) no se pueden usar como
-   src de una imagen. Se convierten al endpoint de miniatura, que sí sirve. */
-function normalizeImageUrl(url) {
-  if (typeof url !== 'string') return '';
-  const m = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:[^#]*&)?id=|thumbnail\?(?:[^#]*&)?id=)([\w-]{20,})/);
-  if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1200';
-  return url;
-}
-
-/* ============================================================
-   HERRAMIENTA DE DIBUJO (tipo pluma: clic = ancla recta,
-   clic + arrastrar = ancla con manejadores/curva)
-
-   En el celular no se dibuja: la figura siempre viene de la
-   biblioteca, un dedo mueve la vista y dos dedos hacen zoom.
-   ============================================================ */
-const tool = new paper.Tool();
-const canvasEl = $('canvas');
-
-// Estilo Rhino: el botón derecho nunca dibuja ni selecciona, solo panea.
-canvasEl.addEventListener('contextmenu', (e) => e.preventDefault());
-
-// Mientras la imagen de calco esté desbloqueada, el lienzo la mueve en vez de dibujar.
-function traceIsEditable() { return !isMobile && !!traceRaster && !traceLocked; }
-
-tool.onMouseDown = (event) => {
-  if (multiTouch) return;
-  if (event.event.button === 2) { isPanning = true; return; }
-
-  // Celular: el lienzo solo se navega. Un dedo arrastra la vista.
-  if (isMobile) { isPanning = true; return; }
-
-  if (traceIsEditable()) { dragOrigin = event.point; return; }
-
-  if (moveMode) {
-    if (!outerPath || !outerPath.closed) return;
-    saveUndoState();
-    moveDragActive = true;
-    moveStart = event.point;
-    return;
-  }
-
-  if (nodeEditMode) {
-    const hitOptions = { segments: true, handles: true, tolerance: 10 / paper.view.zoom };
-    const hit = outerPath && outerPath.hitTest(event.point, hitOptions);
-    activeNodeHit = hit || null;
-    if (activeNodeHit) saveUndoState();
-    nodeDragChanged = false;
-    return;
-  }
-
-  if (mode !== 'outer') return;
-
-  const point = clampToSquare(event.point);
-
-  if (outerPath && outerPath.segments.length > 2) {
-    const start = outerPath.firstSegment.point;
-    if (point.getDistance(start) <= CLOSE_THRESHOLD_MM) {
-      saveUndoState();
-      closeActivePath();
-      return;
-    }
-  }
-
-  if (!outerPath) outerPath = newPath();
-
-  saveUndoState();
-  drawingSegment = outerPath.add(point);
-  lastSegmentAt = Date.now();
-  dragOrigin = point;
-};
-
-tool.onMouseDrag = (event) => {
-  if (multiTouch) return;
-  if (isPanning) { paper.view.center = paper.view.center.subtract(event.delta); return; }
-  if (isMobile) return;
-
-  if (moveDragActive) {
-    if (outerPath) outerPath.translate(event.delta);
-    canvasEl.style.cursor = 'grabbing';
-    revalidateBridge();
-    return;
-  }
-
-  if (traceIsEditable()) {
-    traceState.x += event.delta.x;
-    traceState.y += event.delta.y;
-    applyTraceTransform();
-    return;
-  }
-
-  if (nodeEditMode) {
-    if (!activeNodeHit) return;
-    const seg = activeNodeHit.segment;
-    if (activeNodeHit.type === 'segment') seg.point = clampToSquare(seg.point.add(event.delta));
-    else if (activeNodeHit.type === 'handle-in') seg.handleIn = seg.handleIn.add(event.delta);
-    else if (activeNodeHit.type === 'handle-out') seg.handleOut = seg.handleOut.add(event.delta);
-    nodeDragChanged = true;
-    revalidateBridge();
-    return;
-  }
-
-  if (!drawingSegment) return;
-  const handle = event.point.subtract(dragOrigin);
-  drawingSegment.handleOut = handle;
-  drawingSegment.handleIn = handle.multiply(-1);
-};
-
-tool.onMouseUp = () => {
-  if (moveDragActive) canvasEl.style.cursor = moveMode ? 'grab' : 'crosshair';
-  drawingSegment = null; isPanning = false; activeNodeHit = null; nodeDragChanged = false; moveDragActive = false;
-};
-
-tool.onMouseMove = (event) => {
-  if (isMobile) return;   // en celular el readout se reserva para los avisos
-  const p = event.point;
-  readout.textContent = `x: ${(p.x / 10).toFixed(2)}cm   y: ${(p.y / 10).toFixed(2)}cm   zoom: ${paper.view.zoom.toFixed(0)}x`;
-};
-
-function applyZoom(newZoomRaw, focusPoint) {
-  const oldZoom = paper.view.zoom;
-  const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, newZoomRaw));
-  const beta = oldZoom / newZoom;
-  const centerVec = focusPoint.subtract(paper.view.center);
-  paper.view.center = focusPoint.subtract(centerVec.multiply(beta));
-  paper.view.zoom = newZoom;
-}
-
-canvasEl.addEventListener('wheel', (event) => {
-  event.preventDefault();
-  const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
-  const focus = paper.view.viewToProject(new paper.Point(event.offsetX, event.offsetY));
-  applyZoom(paper.view.zoom * factor, focus);
-}, { passive: false });
-
-/* ============================================================
-   GESTOS TÁCTILES — dos dedos hacen zoom y paneo. Paper.js trata
-   el toque como ratón, así que cuando entra un segundo dedo se
-   descarta el ancla recién creada (heurística de 250ms) para que
-   el gesto de zoom no deje un punto suelto en pantallas táctiles
-   de escritorio, donde sí se dibuja.
-   ============================================================ */
-let multiTouch = false;
-let lastSegmentAt = 0;
-let pinchStart = null;
-
-function touchesToProject(touches) {
-  const rect = canvasEl.getBoundingClientRect();
-  return Array.from(touches).slice(0, 2).map(t =>
-    paper.view.viewToProject(new paper.Point(t.clientX - rect.left, t.clientY - rect.top))
-  );
-}
-
-canvasEl.addEventListener('touchstart', (e) => {
-  if (e.touches.length < 2) return;
-  multiTouch = true;
-
-  // Deshace el ancla que el primer dedo acaba de crear al iniciar el gesto.
-  if (drawingSegment && Date.now() - lastSegmentAt < 250) {
-    const owner = drawingSegment.path;
-    if (owner) owner.removeSegment(drawingSegment.index);
-    drawingSegment = null;
-  }
-
-  const [a, b] = touchesToProject(e.touches);
-  pinchStart = { distance: a.getDistance(b), center: a.add(b).divide(2), zoom: paper.view.zoom };
-}, { passive: true });
-
-canvasEl.addEventListener('touchmove', (e) => {
-  if (!multiTouch || e.touches.length < 2 || !pinchStart) return;
-  e.preventDefault();
-  const [a, b] = touchesToProject(e.touches);
-  const distance = a.getDistance(b);
-  const center = a.add(b).divide(2);
-  if (pinchStart.distance > 0) {
-    applyZoom(pinchStart.zoom * (distance / pinchStart.distance), pinchStart.center);
-  }
-  paper.view.center = paper.view.center.subtract(center.subtract(pinchStart.center));
-}, { passive: false });
-
-canvasEl.addEventListener('touchend', (e) => {
-  if (e.touches.length === 0) { multiTouch = false; pinchStart = null; }
-}, { passive: true });
-canvasEl.addEventListener('touchcancel', () => { multiTouch = false; pinchStart = null; }, { passive: true });
-
-/* ============================================================
-   CIERRE, SUAVIZADO, AGUJERO, VALIDACIÓN
-   ============================================================ */
-
-/* Al cerrar el contorno ya no se salta al 3D: la figura queda en modo
-   edición para suavizar o mover nodos. El paso al 3D
-   lo da siempre el botón "Aceptar diseño". */
-function closeActivePath() {
-  outerPath.closed = true;
-  enterReviewOuter(t('flashClosed'));
-}
-
-function enterReviewOuter(message) {
-  mode = 'review-outer';
-  btnSmooth.disabled = false;
-  btnNodeEdit.disabled = false;
-  if (!isMobile) {
-    btnMove.disabled = false;
-    desktopScaleFactor = 1;
-    desktopScaleSlider.value = 100;
-    $('desktopScaleVal').textContent = '100%';
-  }
-  revalidateBridge();
-  if (message) flash(message);
-}
-
-let flashTimer = null;
-function flash(text) {
-  readout.textContent = text;
-  clearTimeout(flashTimer);
-  flashTimer = setTimeout(() => { readout.textContent = ''; }, 5000);
-}
-
-/* Caja real que ocupa el diseño completo (contorno). */
-function designBounds() {
-  if (!outerPath) return null;
-  return outerPath.bounds;
-}
-
-/* El cuadro de 10 × 10 mm es el límite físico de la pieza: si el motivo
-   escalado se sale, el diseño no es fabricable y no puede pasar al 3D. */
-function fitsInSquare() {
-  const b = designBounds();
-  if (!b) return true;
-  return b.left >= -AREA_TOLERANCE_MM
-      && b.top >= -AREA_TOLERANCE_MM
-      && b.right <= SQUARE_MM + AREA_TOLERANCE_MM
-      && b.bottom <= SQUARE_MM + AREA_TOLERANCE_MM;
-}
-
-/* Una curva que se cruza a sí misma no puede extruirse: se detecta
-   comprobando cada segmento contra los no adyacentes. */
-function hasSelfIntersection(path) {
-  if (!path || !path.closed || path.segments.length < 4) return false;
-  const segs = path.segments;
-  const n = segs.length;
-  for (let i = 0; i < n; i++) {
-    const a1 = segs[i].point;
-    const a2 = segs[(i + 1) % n].point;
-    for (let j = i + 2; j < n; j++) {
-      if (i === 0 && j === n - 1) continue;
-      const b1 = segs[j].point;
-      const b2 = segs[(j + 1) % n].point;
-      if (segmentsCross(a1, a2, b1, b2)) return true;
-    }
-  }
-  return false;
-}
-
-function segmentsCross(a1, a2, b1, b2) {
-  const d1x = a2.x - a1.x, d1y = a2.y - a1.y;
-  const d2x = b2.x - b1.x, d2y = b2.y - b1.y;
-  const cross = d1x * d2y - d1y * d2x;
-  if (Math.abs(cross) < 1e-10) return false;
-  const t = ((b1.x - a1.x) * d2y - (b1.y - a1.y) * d2x) / cross;
-  const u = ((b1.x - a1.x) * d1y - (b1.y - a1.y) * d1x) / cross;
-  return t > 0.001 && t < 0.999 && u > 0.001 && u < 0.999;
-}
-
-/* Puente mínimo y desborde del área bloquean el paso al 3D, no solo avisan —
-   tanto en el botón de escritorio como en el de celular. El trazo se pinta
-   en rojo mientras se sale, para que el motivo del bloqueo sea visible. */
-function revalidateBridge() {
-  bridgeOk = true;
-
-  insideOk = fitsInSquare();
-  noSelfIntersection = !(outerPath && outerPath.closed && hasSelfIntersection(outerPath));
-
-  if (!noSelfIntersection) {
-    warning.textContent = t('warnSelfIntersect');
-    warning.style.display = 'block';
-  } else if (!insideOk) {
-    warning.textContent = t('warnOutOfBounds');
-    warning.style.display = 'block';
-  } else {
-    warning.style.display = 'none';
-  }
-
-  const valid = insideOk && noSelfIntersection;
-  const stroke = valid ? '#ececef' : '#d16565';
-  if (outerPath) outerPath.strokeColor = stroke;
-
-  const ready = !!outerPath && outerPath.closed;
-  btnAccept.disabled = !(ready && insideOk && noSelfIntersection);
-  $('btnMobileAdvance').disabled = !(ready && insideOk && noSelfIntersection);
-}
-
-btnSmooth.addEventListener('click', () => {
-  if (outerPath && outerPath.closed) saveUndoState();
-  if (outerPath) outerPath.smooth({ type: 'continuous' });
-  revalidateBridge();
-});
-
-btnNodeEdit.addEventListener('click', () => {
-  nodeEditMode = !nodeEditMode;
-  if (nodeEditMode) { moveMode = false; btnMove.classList.remove('active'); btnMove.textContent = t('moveBtn'); canvasEl.style.cursor = 'crosshair'; }
-  btnNodeEdit.classList.toggle('active', nodeEditMode);
-  btnNodeEdit.textContent = nodeEditMode ? t('nodeEditBtn') + ' (' + t('active') + ')' : t('nodeEditBtn');
-  canvasEl.style.cursor = nodeEditMode ? 'default' : 'crosshair';
-  if (outerPath) outerPath.fullySelected = nodeEditMode;
-});
-
-btnMove.addEventListener('click', () => {
-  moveMode = !moveMode;
-  if (moveMode) { nodeEditMode = false; btnNodeEdit.classList.remove('active'); btnNodeEdit.textContent = t('nodeEditBtn'); if (outerPath) outerPath.fullySelected = false; }
-  btnMove.classList.toggle('active', moveMode);
-  btnMove.textContent = moveMode ? t('moveBtn') + ' (' + t('active') + ')' : t('moveBtn');
-  canvasEl.style.cursor = moveMode ? 'grab' : 'crosshair';
-});
-
-btnReset.addEventListener('click', resetAll);
-
-function resetAll() {
-  if (outerPath) outerPath.remove();
-  outerPath = null;
-  mode = 'outer';
-  btnSmooth.disabled = true;
-  nodeEditMode = false;
-  btnNodeEdit.disabled = true;
-  btnNodeEdit.classList.remove('active');
-  btnNodeEdit.textContent = t('nodeEditBtn');
-  moveMode = false;
-  moveDragActive = false;
-  btnMove.disabled = true;
-  btnMove.classList.remove('active');
-  btnMove.textContent = t('moveBtn');
-  canvasEl.style.cursor = isMobile ? 'grab' : 'crosshair';
-  undoStack.length = 0;
-  redoStack.length = 0;
-  updateUndoRedoButtons();
-  if (traceRaster) traceRaster.remove();
-  traceRaster = null; traceSrc = null; traceLocked = false;
-  traceBlockedSvg = false;
-  updateTraceAvailability();
-  tracePanel.style.display = 'none';
-  try { sessionStorage.removeItem(TRACE_KEY); } catch (e) {}
-  try { sessionStorage.removeItem(DESIGN_KEY); } catch (e) {}
-  if (isMobile) mobileScalePanel.style.display = 'none';
-  revalidateBridge();
-}
-
-/* ============================================================
-   CALCO — imagen de referencia bajo el dibujo (solo escritorio)
-   ============================================================ */
-const traceInput = $('traceInput');
-btnTrace.addEventListener('click', () => {
-  if (traceBlockedSvg) { flash(t('traceSvgBlocked')); return; }
-  if (traceRaster) { tracePanel.style.display = 'block'; return; }
-  traceInput.click();
-});
-
-function updateTraceAvailability() {
-  btnTrace.classList.toggle('svg-blocked', traceBlockedSvg);
-  btnTrace.title = traceBlockedSvg ? t('traceSvgBlocked') : '';
-}
-
-traceInput.addEventListener('change', (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  downscaleImage(file, 1400).then((dataUrl) => {
-    traceSrc = dataUrl;
-    traceState = { x: SQUARE_MM / 2, y: SQUARE_MM / 2, scale: 1, rotation: 0, opacity: 0.35 };
-    traceLocked = false;
-    createTraceRaster(dataUrl);
-    syncTraceControls();
-  }).catch((err) => flash(t('importReadFailed') + err.message));
-  traceInput.value = '';
-});
-
-/* La imagen se reduce antes de guardarla: sessionStorage tiene unos 5MB y
-   una foto de celular sin reducir lo llena de una sola vez. */
-function downscaleImage(file, maxSide) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('no se pudo leer el archivo'));
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('formato de imagen no válido'));
-      img.onload = () => {
-        const ratio = Math.min(1, maxSide / Math.max(img.width, img.height));
-        const c = document.createElement('canvas');
-        c.width = Math.round(img.width * ratio);
-        c.height = Math.round(img.height * ratio);
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        resolve(c.toDataURL('image/jpeg', 0.85));
-      };
-      img.src = String(reader.result);
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function createTraceRaster(dataUrl) {
-  if (traceRaster) { traceRaster.remove(); traceRaster = null; }
-  traceLayer.activate();
-  traceRaster = new paper.Raster({ source: dataUrl, crossOrigin: 'anonymous' });
-  traceRaster.onLoad = () => { applyTraceTransform(); };
-  drawLayer.activate();
-  if (!isMobile) tracePanel.style.display = 'block';
-  updateTraceHint();
-}
-
-function applyTraceTransform() {
-  if (!traceRaster || !traceRaster.width) return;
-  traceRaster.matrix.reset();
-  const base = SQUARE_MM / Math.max(traceRaster.width, traceRaster.height);
-  traceRaster.scale(base * traceState.scale);
-  traceRaster.rotate(traceState.rotation);
-  traceRaster.position = new paper.Point(traceState.x, traceState.y);
-  traceRaster.opacity = traceState.opacity;
-}
-
-function syncTraceControls() {
-  $('traceOpacity').value = Math.round(traceState.opacity * 100);
-  $('traceOpacityVal').textContent = Math.round(traceState.opacity * 100) + '%';
-  $('traceScale').value = Math.round(traceState.scale * 100);
-  $('traceScaleVal').textContent = Math.round(traceState.scale * 100) + '%';
-  $('traceRot').value = Math.round(traceState.rotation);
-  $('traceRotVal').textContent = Math.round(traceState.rotation) + '°';
-  ['traceScale', 'traceRot'].forEach(id => { $(id).disabled = traceLocked; });
-  $('btnTraceLock').textContent = traceLocked ? t('unlock') : t('lock');
-  updateTraceHint();
-}
-
-function updateTraceHint() {
-  $('traceHint').textContent = traceLocked
-    ? t('traceHintLocked')
-    : t('traceHint');
-  canvasEl.style.cursor = isMobile ? 'grab' : (traceIsEditable() ? 'move' : (nodeEditMode ? 'default' : 'crosshair'));
-}
-
-$('traceOpacity').addEventListener('input', (e) => {
-  traceState.opacity = Number(e.target.value) / 100;
-  $('traceOpacityVal').textContent = e.target.value + '%';
-  if (traceRaster) traceRaster.opacity = traceState.opacity;
-});
-$('traceScale').addEventListener('input', (e) => {
-  traceState.scale = Number(e.target.value) / 100;
-  $('traceScaleVal').textContent = e.target.value + '%';
-  applyTraceTransform();
-});
-$('traceRot').addEventListener('input', (e) => {
-  traceState.rotation = Number(e.target.value);
-  $('traceRotVal').textContent = e.target.value + '°';
-  applyTraceTransform();
-});
-
-$('btnTraceLock').addEventListener('click', () => {
-  traceLocked = !traceLocked;
-  syncTraceControls();
-});
-
-$('btnTraceRemove').addEventListener('click', () => {
-  if (traceRaster) traceRaster.remove();
-  traceRaster = null; traceSrc = null; traceLocked = false;
-  tracePanel.style.display = 'none';
-  canvasEl.style.cursor = isMobile ? 'grab' : (nodeEditMode ? 'default' : 'crosshair');
-  try { sessionStorage.removeItem(TRACE_KEY); } catch (e) {}
-});
-
-/* ============================================================
-   FONDO, PRELUDE Y CATÁLOGO DESDE EL SPREADSHEET
+   FONDO Y PRELUDE DESDE EL SPREADSHEET
    Hoja "background": A1 imagen, B1 escala (10–100), C1 color de app.
    Hoja "PRELUDE":    A2 logo,   B2 escala (1–100), C2 color de fondo.
-   Hoja "SVG CATALOG": A2:A url del SVG, B2:B url de la previsualización.
+   Hoja "Tutorial":   A2 video "cómo empezar" (menú inicial).
    ============================================================ */
-let catalogItems = [];
 let tutorialData = {};
 let configPromise = null;
 
@@ -2122,11 +690,26 @@ async function applyConfig() {
     bgImage.style.width = scaleNum + '%';
     bgImage.style.height = 'auto';
   }
-  if (Array.isArray(data.catalog)) {
-    catalogItems = data.catalog.filter(it => it && it.svg);
-  }
-  if (data && data.tutorial) tutorialData = data.tutorial;
+
+  // El video del menú inicial se carga en cuanto llega la configuración.
+  tutorialData = (data && data.tutorial) || {};
+  syncImportVideo();
   return data;
+}
+
+/* Los enlaces normales de Drive (/file/d/ID/view) no se pueden usar como
+   src de una imagen. Se convierten al endpoint de miniatura, que sí sirve. */
+function normalizeImageUrl(url) {
+  if (typeof url !== 'string') return '';
+  const m = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:[^#]*&)?id=|thumbnail\?(?:[^#]*&)?id=)([\w-]{20,})/);
+  if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1200';
+  return url;
+}
+
+function syncImportVideo() {
+  const impVid = $('importVideo');
+  const src = (tutorialData && tutorialData.inicio) || '';
+  if (impVid && impVid.getAttribute('src') !== src) impVid.src = src;
 }
 
 /* ---------- PRELUDE ---------- */
@@ -2175,622 +758,26 @@ function dismissPrelude(prelude, fadeMs) {
   }, fadeMs + 60);
 }
 
-applyConfig();
-runPrelude();
-
 /* ============================================================
-   ACEPTAR DISEÑO — se guarda la geometría completa (segmentos con
-   manejadores) además del pathData, para poder volver desde el 3D
-   y seguir editando en vez de empezar de cero.
-   ============================================================ */
-function serializePath(p) {
-  return {
-    closed: !!p.closed,
-    segments: p.segments.map(s => [
-      [s.point.x, s.point.y],
-      [s.handleIn.x, s.handleIn.y],
-      [s.handleOut.x, s.handleOut.y],
-    ]),
-  };
-}
-
-function deserializePath(data) {
-  const p = newPath();
-  data.segments.forEach((s) => {
-    p.add(new paper.Segment(
-      new paper.Point(s[0][0], s[0][1]),
-      new paper.Point(s[1][0], s[1][1]),
-      new paper.Point(s[2][0], s[2][1])
-    ));
-  });
-  p.closed = !!data.closed;
-  return p;
-}
-
-function acceptDesign() {
-  if (!outerPath || !outerPath.closed) { flash(t('flashCloseBeforeAccept')); return; }
-  revalidateBridge();
-  if (!noSelfIntersection) { flash(t('flashSelfIntersect')); return; }
-  if (!insideOk) { flash(t('flashOutOfBounds')); return; }
-
-  const totalLengthMm = outerPath.length;
-  const payload = {
-    outerSVG: outerPath.pathData,
-    holeSVG: '',
-    totalLengthMm: Number(totalLengthMm.toFixed(3)),
-    editor: {
-      outer: serializePath(outerPath),
-      hole: null,
-    },
-  };
-  sessionStorage.setItem(DESIGN_KEY, JSON.stringify(payload));
-
-  // El calco se guarda aparte: si no cabe, el diseño igual se conserva.
-  try {
-    if (traceSrc) {
-      sessionStorage.setItem(TRACE_KEY, JSON.stringify({ src: traceSrc, state: traceState, locked: traceLocked }));
-    }
-  } catch (err) {
-    console.warn('El calco no se pudo guardar (sin espacio) — el diseño sí:', err);
-  }
-
-  window.location.href = 'extrusion.html';
-}
-btnAccept.addEventListener('click', acceptDesign);
-
-/* ============================================================
-   RESTAURAR AL VOLVER DESDE EL 3D
-   ============================================================ */
-function restoreSession() {
-  let restored = false;
-  try {
-    const raw = sessionStorage.getItem(DESIGN_KEY);
-    const data = raw ? JSON.parse(raw) : null;
-    if (data && data.editor && data.editor.outer) {
-      drawLayer.activate();
-      outerPath = deserializePath(data.editor.outer);
-      enterReviewOuter(t('flashRestored'));
-      restored = true;
-    }
-  } catch (err) {
-    console.warn('No se pudo recuperar el diseño:', err);
-  }
-
-  try {
-    const rawTrace = sessionStorage.getItem(TRACE_KEY);
-    const t = rawTrace ? JSON.parse(rawTrace) : null;
-    if (t && t.src && !isMobile) {
-      traceSrc = t.src;
-      traceState = Object.assign(traceState, t.state || {});
-      traceLocked = !!t.locked;
-      createTraceRaster(t.src);
-      syncTraceControls();
-    }
-  } catch (err) {
-    console.warn('No se pudo recuperar el calco:', err);
-  }
-
-  /* Al volver del 3D en celular, la barra de escala tiene que reaparecer:
-     es el único control del paso 2 allí. La escala mostrada se deduce del
-     tamaño real recuperado, no se asume 100%. */
-  if (restored && isMobile) {
-    mobileScaleFactor = 1;
-    mobileScaleSlider.value = 100;
-    $('mobileScaleVal').textContent = '100%';
-    mobileScalePanel.style.display = 'block';
-  }
-
-  return restored;
-}
-
-/* ============================================================
-   ETAPA 1 — IMPORTAR ARCHIVO, ELEGIR MOTIVO, O DIBUJAR A MANO
-   ============================================================ */
-const importScreen = $('importScreen');
-const importStatus = $('importStatus');
-const fileInput = $('fileInput');
-const stepImport = $('stepImport');
-const stepDraw = $('stepDraw');
-const stepExtrude = $('stepExtrude');
-
-function closeImportScreen() {
-  drawModeEntered = true;
-  importScreen.style.display = 'none';
-  const impVid = $('importVideo');
-  if (impVid) impVid.pause();
-  stepImport.classList.remove('active');
-  stepDraw.classList.add('active');
-  syncMobileSteps();
-  updateHelpButton();
-  refreshTipsForStage(450);
-}
-
-/* Volver al paso 1 sin perder lo ya dibujado: solo reabre la pantalla de
-   inicio. El trazo actual se pierde únicamente si el usuario elige un nuevo
-   archivo o motivo (adoptImportedItem llama resetAll antes de reemplazarlo);
-   si solo cierra la pantalla otra vez, el diseño sigue intacto. */
-function openImportScreen() {
-  drawModeEntered = false;
-  catalogScreen.style.display = 'none';
-  importScreen.style.display = 'flex';
-  const src = (tutorialData && tutorialData.inicio) || '';
-  const impVid = $('importVideo');
-  if (impVid) {
-    if (impVid.getAttribute('src') !== src) impVid.src = src;
-    if (src) impVid.play().catch(() => {});
-  }
-  stepImport.classList.add('active');
-  stepDraw.classList.remove('active');
-  syncMobileSteps();
-  updateHelpButton();
-  refreshTipsForStage(350);
-}
-
-function setImportStatus(text, isError) {
-  importStatus.textContent = text;
-  importStatus.classList.toggle('error', !!isError);
-}
-
-$('btnUpload').addEventListener('click', () => fileInput.click());
-$('btnSkipImport').addEventListener('click', closeImportScreen);
-
-fileInput.addEventListener('change', async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  const ext = file.name.split('.').pop().toLowerCase();
-  setImportStatus(t('importLoading'), false);
-  showLoading(t('importProcessing'));
-
-  try {
-    if (ext === 'svg') {
-      importSVGDesign(await file.text());
-    } else if (ext === 'dxf') {
-      await importDXFDesign(await file.text());
-    } else if (ext === 'pdf') {
-      setImportStatus(t('importPdf'), true);
-      return;
-    } else {
-      setImportStatus(t('importUnknown'), true);
-      return;
-    }
-    closeImportScreen();
-  } catch (err) {
-    console.error(err);
-    setImportStatus(t('importReadFailed') + err.message, true);
-  } finally {
-    hideLoading();
-    fileInput.value = '';
-  }
-});
-
-/* Deja el path importado dentro del cuadrado de trabajo, centrado
-   y ocupando ~90% del área, para que quede editable de inmediato. */
-function fitPathToSquare(path, marginRatio = 0.9) {
-  const bounds = path.bounds;
-  const largestSide = Math.max(bounds.width, bounds.height);
-  if (largestSide > 0) {
-    const scale = (SQUARE_MM * marginRatio) / largestSide;
-    path.scale(scale, bounds.center);
-  }
-  path.position = new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2);
-}
-
-/* De un item importado (que puede ser un Group con varios paths),
-   se queda con el path/compound-path de mayor área — asumimos que
-   es el contorno principal de la pieza. */
-function flattenToSinglePath(item) {
-  if (item instanceof paper.Path || item instanceof paper.CompoundPath) return item;
-  if (item.children && item.children.length) {
-    let best = null, bestArea = -1;
-    item.children.forEach((child) => {
-      const candidate = flattenToSinglePath(child);
-      if (candidate) {
-        const area = Math.abs(candidate.area || 0);
-        if (area > bestArea) { bestArea = area; best = candidate; }
-      }
-    });
-    return best;
-  }
-  return null;
-}
-
-function styleAsOuter(path) {
-  path.strokeColor = '#ececef';
-  path.strokeWidth = 1.5;
-  path.strokeScaling = false;
-  path.fillColor = null;
-  return path;
-}
-
-/* Un CompoundPath se queda con el hijo de mayor área como contorno;
-   el resto se descarta. */
-function adoptImportedItem(item) {
-  drawLayer.activate();
-  resetAll();
-
-  let outer = item;
-  if (item instanceof paper.CompoundPath) {
-    const kids = item.children.slice().sort((a, b) => Math.abs(b.area || 0) - Math.abs(a.area || 0));
-    outer = kids[0];
-    kids.slice(1).forEach(k => k.remove());
-    item.remove();
-    fitPathToSquare(outer);
-  } else {
-    fitPathToSquare(outer);
-  }
-
-  if (!outer) throw new Error('el trazo no es utilizable');
-  outerPath = styleAsOuter(outer);
-  outerPath.closed = true;
-  enterReviewOuter(t('flashTraceLoaded'));
-  if (isMobile) {
-    mobileScaleFactor = 1;
-    mobileScaleSlider.value = 100;
-    $('mobileScaleVal').textContent = '100%';
-    mobileScalePanel.style.display = 'block';
-    fitView(); // vuelve al encuadre por defecto: cuadrícula + cotas centradas
-  }
-}
-
-/* Un SVG de línea (fill="none" + stroke) no se puede extruir: un trazo sin
-   grosor no genera volumen. Se detecta antes de cargarlo para no dejar al
-   cliente con una pieza vacía en el paso 3. */
-function isStrokeOnlySVG(svgText) {
-  const hasFill = /fill\s*[:=]\s*["']?\s*(?!none)(#|rgb|url|[a-z])/i.test(svgText);
-  const strokeOnly = /fill\s*[:=]\s*["']?\s*none/i.test(svgText) && /stroke\s*[:=]\s*["']?\s*(?!none)/i.test(svgText);
-  return strokeOnly && !hasFill;
-}
-
-function importSVGDesign(svgText) {
-  if (isStrokeOnlySVG(svgText)) {
-    throw new Error('es un dibujo de línea, no una silueta rellena. Para poder extruirlo necesita ser una forma cerrada con relleno.');
-  }
-  const imported = paper.project.importSVG(svgText, { expandShapes: true });
-  if (!imported) throw new Error('el SVG no se pudo interpretar');
-  const path = flattenToSinglePath(imported);
-  if (!path) { imported.remove(); throw new Error('el SVG no contiene un trazo utilizable'); }
-  if (path !== imported) { path.remove(); imported.remove(); drawLayer.addChild(path); }
-  adoptImportedItem(path);
-  traceBlockedSvg = true;
-  updateTraceAvailability();
-}
-
-/* Soporte de DXF: mejor esfuerzo. Convierte LWPOLYLINE/POLYLINE y
-   CIRCLE a un path. Formas más complejas (splines, bloques anidados)
-   pueden no importarse bien — en ese caso, exporta a SVG desde tu
-   software de diseño y usa esa ruta en su lugar. */
-async function importDXFDesign(dxfText) {
-  const { default: DxfParser } = await import('https://esm.sh/dxf-parser@1.1.2');
-  const dxf = new DxfParser().parseSync(dxfText);
-  if (!dxf || !dxf.entities || !dxf.entities.length) {
-    throw new Error('no se encontraron entidades utilizables en el DXF');
-  }
-
-  let best = null, bestArea = -1;
-  dxf.entities.forEach((entity) => {
-    let candidate = null;
-    if ((entity.type === 'LWPOLYLINE' || entity.type === 'POLYLINE') && entity.vertices && entity.vertices.length > 2) {
-      candidate = new paper.Path(entity.vertices.map(v => new paper.Point(v.x, v.y)));
-      candidate.closed = true;
-    } else if (entity.type === 'CIRCLE') {
-      candidate = new paper.Path.Circle(new paper.Point(entity.center.x, entity.center.y), entity.radius);
-    }
-    if (candidate) {
-      const area = Math.abs(candidate.area || 0);
-      if (area > bestArea) {
-        if (best) best.remove();
-        bestArea = area; best = candidate;
-      } else candidate.remove();
-    }
-  });
-
-  if (!best) throw new Error('no se encontró un contorno cerrado utilizable en el DXF');
-  adoptImportedItem(best);
-}
-
-/* ============================================================
-   BIBLIOTECA DE MOTIVOS
-   Los SVG se piden a través del CDN y se cachean en localStorage
-   para no volver a descargarlos.
-   ============================================================ */
-const catalogScreen = $('catalogScreen');
-const catalogGrid = $('catalogGrid');
-const catalogStatus = $('catalogStatus');
-const SVG_CACHE_PREFIX = 'topitos-svg:';
-
-function setCatalogStatus(text, isError) {
-  catalogStatus.textContent = text;
-  catalogStatus.classList.toggle('error', !!isError);
-}
-
-$('btnCatalog').addEventListener('click', openCatalog);
-$('btnCatalogClose').addEventListener('click', () => {
-  catalogScreen.style.display = 'none';
-  syncMobileSteps();
-  refreshTipsForStage(300);
-});
-
-async function openCatalog() {
-  catalogScreen.style.display = 'flex';
-  syncMobileSteps();
-  updateHelpButton();
-  if (!catalogItems.length) {
-    setCatalogStatus(t('catalogStatusLoading'), false);
-    showLoading('Cargando biblioteca de motivos…');
-    await applyConfig();
-    hideLoading();
-  }
-  renderCatalog();
-  refreshTipsForStage(300);
-}
-
-/* Buscador con coincidencia por prefijo: "flor" encuentra las etiquetas
-   "flor", "florero", pero no "girasol". Basta con que UNA etiqueta del
-   motivo empiece por lo escrito. */
-$('catalogSearch').addEventListener('input', (e) => renderCatalog(e.target.value));
-
-function renderCatalog(query) {
-  catalogGrid.innerHTML = '';
-  if (!catalogItems.length) {
-    setCatalogStatus(t('catalogStatusEmpty'), false);
-    return;
-  }
-  const q = (query || '').trim().toLowerCase();
-  const items = q
-    ? catalogItems.filter(it => Array.isArray(it.tags) && it.tags.some(tag => tag.startsWith(q)))
-    : catalogItems;
-
-  if (!items.length) {
-    setCatalogStatus(t('catalogStatusNoMatch'), false);
-    return;
-  }
-  setCatalogStatus('', false);
-  items.forEach((item, i) => {
-    const btn = document.createElement('button');
-    btn.className = 'motif';
-    btn.type = 'button';
-    btn.title = t('motifPrefix') + (i + 1);
-    const img = document.createElement('img');
-    img.loading = 'lazy';
-    img.alt = t('motifPrefix') + (i + 1);
-    img.src = normalizeImageUrl(item.preview || item.svg);
-    btn.appendChild(img);
-    btn.addEventListener('click', () => chooseMotif(item, i));
-    catalogGrid.appendChild(btn);
-  });
-}
-
-async function fetchMotifSVG(url) {
-  const cacheKey = SVG_CACHE_PREFIX + url;
-  try {
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) return cached;
-  } catch (e) {}
-
-  /* Los motivos se bajan directo del CDN. Cloudinary manda cabeceras CORS, así
-     que el navegador puede leerlos sin intermediarios. Un origen que no las
-     mande (Drive, por ejemplo) va a fallar aquí: la biblioteca necesita estar
-     alojada en un CDN con CORS. */
-  let res;
-  try {
-    res = await fetch(url, { mode: 'cors' });
-  } catch (err) {
-    throw new Error('el origen del motivo no permite descargas desde el navegador (falta CORS). Alójalo en Cloudinary.');
-  }
-  if (!res.ok) throw new Error('el CDN respondió ' + res.status);
-
-  const svg = await res.text();
-  if (svg.indexOf('<svg') === -1) throw new Error('el archivo no es un SVG');
-
-  try { localStorage.setItem(cacheKey, svg); } catch (e) { /* cuota llena: sigue sin caché */ }
-  return svg;
-}
-
-async function chooseMotif(item, i) {
-  setCatalogStatus(t('catalogMotifLoading'), false);
-  showLoading(t('catalogMotifLoading'));
-  try {
-    const svgText = await fetchMotifSVG(item.svg);
-    importSVGDesign(svgText);
-    catalogScreen.style.display = 'none';
-    closeImportScreen();   // deja la ayuda del paso de escalar en cola
-  } catch (err) {
-    console.error(err);
-    setCatalogStatus(t('catalogLoadFail') + err.message, true);
-  } finally {
-    hideLoading();
-  }
-}
-
-/* ============================================================
-   RESTRICCIONES EN CELULAR — dibujar y calcar son de escritorio;
-   desde el celular se elige un motivo de la biblioteca y se
-   ajusta su tamaño.
+   RESTRICCIONES EN CELULAR — en el celular el menú solo ofrece
+   la biblioteca de motivos; subir archivos y dibujar a mano son
+   de escritorio.
    ============================================================ */
 if (isMobile) {
   $('btnUpload').style.display = 'none';
   $('btnSkipImport').style.display = 'none';
   const importHint = $('importHint');
   if (importHint) importHint.textContent = t('importMobileHint');
-
-  [btnTrace, btnSmooth, btnNodeEdit, $('btnUndo'), $('btnRedo'), btnMove, $('btnTutorial')].forEach((b) => { b.style.display = 'none'; });
-  canvasEl.style.cursor = 'grab';
 }
 
-mobileScaleSlider.addEventListener('input', (e) => {
-  if (!outerPath) return;
-  // Tope inferior duro: por debajo del 35% la pieza deja de ser fabricable.
-  const percent = Math.max(MIN_MOBILE_SCALE, Number(e.target.value));
-  if (String(percent) !== e.target.value) e.target.value = String(percent);
-  const relative = (percent / 100) / mobileScaleFactor;
-  const center = new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2);
-  outerPath.scale(relative, center);
-  mobileScaleFactor = percent / 100;
-  $('mobileScaleVal').textContent = percent + '%';
-  // Si al crecer se sale del cuadro, revalidateBridge bloquea el paso al 3D.
-  revalidateBridge();
+/* ---------- Idiomas ---------- */
+document.querySelectorAll('#langStart .ls-opt').forEach((b) => {
+  b.addEventListener('click', () => setLanguage(b.dataset.lang));
 });
+setLanguage(currentLang);
 
-/* ---------- DESHACER / REHACER — botones y atajos de teclado ---------- */
-$('btnUndo').addEventListener('click', doUndo);
-$('btnRedo').addEventListener('click', doRedo);
-window.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); doUndo(); }
-  if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); doRedo(); }
-});
-
-/* ---------- Escala en escritorio ---------- */
-let desktopScaleFactor = 1;
-const desktopScaleSlider = $('desktopScaleSlider');
-
-desktopScaleSlider.addEventListener('input', (e) => {
-  if (!outerPath) return;
-  // Tope inferior duro: por debajo del 50% la pieza queda menor a 5 mm y no es fabricable.
-  const percent = Math.max(50, Number(e.target.value));
-  if (String(percent) !== e.target.value) e.target.value = String(percent);
-  const relative = (percent / 100) / desktopScaleFactor;
-  const center = new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2);
-  outerPath.scale(relative, center);
-  desktopScaleFactor = percent / 100;
-  $('desktopScaleVal').textContent = percent + '%';
-  revalidateBridge();
-});
-
-/* Retroceder: vuelve directo a la biblioteca (en móvil es la única fuente de
-   motivos) sin pasar por la pantalla de "¿cómo quieres empezar?". El diseño
-   actual solo se descarta si de verdad elige otro motivo — si cierra la
-   biblioteca sin elegir, sigue con el que tenía. */
-$('btnMobileBack').addEventListener('click', () => {
-  openCatalog();
-});
-
-/* Avanzar: mismo criterio de validación que el paso 3. */
-$('btnMobileAdvance').addEventListener('click', () => {
-  if (!outerPath || !outerPath.closed) { flash(t('flashChooseMotif')); return; }
-  acceptDesign();
-});
-
-/* ---------- Panel de controles colapsable "hacia un costado" (escritorio) ---------- */
-const drawPanelWrap = $('drawPanelWrap');
-const drawPanelToggle = $('drawPanelToggle');
-drawPanelToggle.addEventListener('click', () => {
-  const collapsed = drawPanelWrap.classList.toggle('collapsed');
-  drawPanelToggle.textContent = collapsed ? '›' : '‹';
-});
-// En ventanas angostas de escritorio el panel arranca plegado para no tapar el lienzo.
-if (!isMobile && window.matchMedia('(max-width: 720px)').matches) {
-  drawPanelWrap.classList.add('collapsed');
-  drawPanelToggle.textContent = '›';
-}
-
-/* ---------- Tutorial en 2D ----------
-   "Ver tutorial" abre un video a la izquierda (Tutorial!B2) que encoge el
-   espacio de trabajo. Cerrarlo vuelve a dejar el lienzo libre. */
-const tutorialPanel = $('tutorialPanel');
-const tutVideo = $('tutVideo');
-const btnTutorial = $('btnTutorial');
-const tutVideoSrc = () => (tutorialData && tutorialData.dibujo) || '';
-let tutorialOpen = false;
-
-/* Reajuste del área de dibujo de Paper.js al tamaño real del canvas. Al abrir
-   el tutorial el canvas se reduce a los 2/3 (CSS), pero Paper.js no vuelve a
-   medir su buffer en un cambio de clase: si no se sincroniza, el dibujo se
-   aplasta horizontalmente. Se lee el rect real del canvas tras aplicar el
-   estado y se iguala paper.view.viewSize. */
-function resize2d() {
-  const r = canvasEl.getBoundingClientRect();
-  paper.view.viewSize = new paper.Size(r.width, r.height);
-  paper.view.update();
-}
-function openTutorial() {
-  if (!tutVideoSrc()) { flash(t('tutNoVideo')); return; }
-  if (tutVideo.getAttribute('src') !== tutVideoSrc()) tutVideo.src = tutVideoSrc();
-  tutorialPanel.classList.add('open');
-  document.documentElement.classList.add('tutorial-open');
-  resize2d();
-  tutorialOpen = true;
-  btnTutorial.textContent = t('tutCloseBtn');
-  tutVideo.play().catch(() => {});
-  closeTip();
-  clearTipQueue();
-}
-function closeTutorial() {
-  tutorialPanel.classList.remove('open');
-  document.documentElement.classList.remove('tutorial-open');
-  resize2d();
-  tutorialOpen = false;
-  tutVideo.pause();
-  btnTutorial.textContent = t('tutorialBtn');
-}
-$('btnTutorial').addEventListener('click', () => { tutorialOpen ? closeTutorial() : openTutorial(); });
-$('btnTutClose').addEventListener('click', closeTutorial);
-
-/* ---------- Stepper de escritorio — volver a un paso anterior ---------- */
-stepImport.addEventListener('click', () => {
-  if (importScreen.style.display !== 'none') return; // ya está abierto
-  openImportScreen();
-});
-stepDraw.addEventListener('click', () => {
-  if (importScreen.style.display === 'none' && catalogScreen.style.display === 'none') return; // ya está aquí
-  catalogScreen.style.display = 'none';
-  closeImportScreen();
-});
-stepExtrude.addEventListener('click', () => {
-  if (!outerPath || !outerPath.closed) { flash(t('flashCloseBefore3d')); return; }
-  acceptDesign();
-});
-
-/* ---------- Barra de pasos en celular ----------
-   Los mismos destinos del stepper, arriba y con nombres que se entienden
-   sin conocer la palabra "extrusión". */
-const mstepImport = $('mstepImport');
-const mstepScale = $('mstepScale');
-const mstepExtrude = $('mstepExtrude');
-
-function syncMobileSteps() {
-  const importing = importScreen.style.display !== 'none' || catalogScreen.style.display === 'flex';
-  mstepImport.classList.toggle('active', importing);
-  mstepScale.classList.toggle('active', !importing);
-  mstepExtrude.classList.remove('active');
-}
-
-mstepImport.addEventListener('click', () => {
-  if (catalogScreen.style.display === 'flex') {
-    catalogScreen.style.display = 'none';
-    syncMobileSteps();
-    refreshTipsForStage(300);
-    return;
-  }
-  openImportScreen();
-});
-
-mstepScale.addEventListener('click', () => {
-  if (!outerPath) {
-    flash(t('flashChooseFirst'));
-    openCatalog();
-    return;
-  }
-  catalogScreen.style.display = 'none';
-  closeImportScreen();
-  mobileScalePanel.style.display = 'block';
-});
-
-mstepExtrude.addEventListener('click', () => {
-  if (!outerPath || !outerPath.closed) {
-    flash(t('flashChooseMotif'));
-    openCatalog();
-    return;
-  }
-  acceptDesign();
-});
-
-/* ============================================================
-   ARRANQUE
-   ============================================================ */
-if (restoreSession()) closeImportScreen();
-revalidateBridge();
-syncMobileSteps();
-updateHelpButton();
+applyConfig();
+runPrelude();
 </script>
 </body>
 </html>
