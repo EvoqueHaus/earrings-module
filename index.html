@@ -95,7 +95,14 @@
     display: flex; align-items: center; justify-content: center;
     padding: 20px;
   }
+  /* Video de fondo de la compuerta (Tutorial!A2): videoloop sin controles. */
+  #termsVideo {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; z-index: 0; background: var(--bg);
+    pointer-events: none;
+  }
   #termsGate .card {
+    position: relative; z-index: 1;
     background: var(--panel); border: 1px solid var(--line);
     border-radius: 14px; padding: 30px; width: 380px; max-width: 100%; text-align: center;
   }
@@ -117,15 +124,19 @@
     border: 1px solid var(--line); border-radius: 8px;
     background: rgba(255,255,255,0.04);
   }
-  #langStart .ls-opt {
+  #langStart .ls-opt,
+  #importLang .ls-opt {
     width: 42px; height: 30px; padding: 0; border: none; border-radius: 0;
     background: transparent; color: var(--text-dim);
     font-family: inherit; font-size: 11px; font-weight: 600; line-height: 1;
     cursor: pointer; letter-spacing: 0.04em;
   }
-  #langStart .ls-opt + .ls-opt { border-left: 1px solid var(--line); }
-  #langStart .ls-opt.active { background: var(--accent); color: #0a0a0a; }
-  #langStart .ls-opt:hover:not(.active) { color: var(--text); background: rgba(255,255,255,0.08); }
+  #langStart .ls-opt + .ls-opt,
+  #importLang .ls-opt + .ls-opt { border-left: 1px solid var(--line); }
+  #langStart .ls-opt.active,
+  #importLang .ls-opt.active { background: var(--accent); color: #0a0a0a; }
+  #langStart .ls-opt:hover:not(.active),
+  #importLang .ls-opt:hover:not(.active) { color: var(--text); background: rgba(255,255,255,0.08); }
 
   /* ---------- PANTALLA DE INICIO ---------- */
   #importScreen {
@@ -135,9 +146,19 @@
     padding: 20px;
   }
   #importScreen .card {
+    position: relative;
     background: var(--panel); border: 1px solid var(--line);
     border-radius: 14px; padding: 32px; width: 380px; max-width: 100%; text-align: center;
   }
+  /* Selector ES/EN del menú inicial: solo en móvil (en PC la compuerta ya lo tiene). */
+  #importLang {
+    display: none;
+    position: absolute; top: 12px; right: 12px; z-index: 2;
+    overflow: hidden;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: rgba(255,255,255,0.04);
+  }
+  .is-mobile #importLang { display: flex; }
   #importScreen h2 { font-size: 16px; margin: 0 0 8px; }
   #importScreen p { font-size: 12px; color: var(--text-dim); margin: 0 0 22px; line-height: 1.5; }
   #importScreen .row { display: flex; flex-direction: column; gap: 8px; }
@@ -237,9 +258,13 @@
   <div id="importScreen">
     <div class="import-split">
       <div id="importVideoWrap">
-        <video id="importVideo" controls loop playsinline preload="metadata"></video>
+        <video id="importVideo" autoplay muted loop playsinline preload="metadata"></video>
       </div>
       <div class="card">
+        <div id="importLang" role="group" aria-label="Idioma / Language">
+          <button type="button" class="ls-opt" data-lang="es">ES</button>
+          <button type="button" class="ls-opt" data-lang="en">EN</button>
+        </div>
         <h2 data-i18n="importTitle">Empieza el diseño de tus topitos seleccionando una de éstas opciones</h2>
         <p id="importHint"></p>
         <input type="file" id="fileInput" accept=".svg,.dxf,.pdf" hidden>
@@ -254,6 +279,7 @@
   </div>
 
   <div id="termsGate">
+    <video id="termsVideo" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video>
     <div id="langStart" role="group" aria-label="Idioma / Language">
       <button type="button" class="ls-opt" data-lang="es">ES</button>
       <button type="button" class="ls-opt" data-lang="en">EN</button>
@@ -361,6 +387,8 @@ function applyLanguage() {
   });
   const langStart = $('langStart');
   if (langStart) langStart.querySelectorAll('.ls-opt').forEach((b) => b.classList.toggle('active', b.dataset.lang === currentLang));
+  const importLang = $('importLang');
+  if (importLang) importLang.querySelectorAll('.ls-opt').forEach((b) => b.classList.toggle('active', b.dataset.lang === currentLang));
   const importHint = $('importHint');
   if (importHint && isMobile) importHint.textContent = table.importMobileHint;
 }
@@ -559,15 +587,10 @@ function renderTip(id, text, target) {
   });
 }
 
-/* En esta pantalla solo hay un consejo: señalar el menú de inicio. El resto
-   de los letreros del recorrido viven en el editor 2D (Dibujar.html). */
+/* El tutorial vive únicamente en el editor 2D (Dibujar.html) y en la vista 3D
+   (extrusión.html). En esta pantalla no se presenta ningún globo de ayuda. */
 function tipsForStage() {
-  if (tourOff) return;
-  queueTips([{
-    id: 'inicio',
-    text: t(isMobile ? 'tourStartMobile' : 'tourStart'),
-    target: () => $('btnCatalog'),
-  }]);
+  /* sin tutorial en la compuerta de términos ni en el menú inicial */
 }
 
 function maybeStartTour() {
@@ -708,8 +731,10 @@ function normalizeImageUrl(url) {
 
 function syncImportVideo() {
   const impVid = $('importVideo');
+  const termsVid = $('termsVideo');
   const src = (tutorialData && tutorialData.inicio) || '';
   if (impVid && impVid.getAttribute('src') !== src) impVid.src = src;
+  if (termsVid && termsVid.getAttribute('src') !== src) termsVid.src = src;
 }
 
 /* ---------- PRELUDE ---------- */
@@ -772,6 +797,9 @@ if (isMobile) {
 
 /* ---------- Idiomas ---------- */
 document.querySelectorAll('#langStart .ls-opt').forEach((b) => {
+  b.addEventListener('click', () => setLanguage(b.dataset.lang));
+});
+document.querySelectorAll('#importLang .ls-opt').forEach((b) => {
   b.addEventListener('click', () => setLanguage(b.dataset.lang));
 });
 setLanguage(currentLang);
