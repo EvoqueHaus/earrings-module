@@ -67,7 +67,7 @@
     position: absolute; top: 0; left: 0; right: 0; z-index: 2;
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     padding: 14px 20px;
-    background: linear-gradient(to bottom, rgba(28,28,30,0.9), transparent);
+    background: var(--bg);
   }
   #topbar h1 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
   .topbar-left { display: flex; align-items: center; gap: 10px; }
@@ -220,7 +220,7 @@
     position: absolute; bottom: 0; left: 0; right: 0; z-index: 2;
     display: flex; align-items: center; justify-content: center; gap: 28px;
     padding: 16px 0;
-    background: linear-gradient(to top, rgba(28,28,30,0.9), transparent);
+    background: var(--bg);
     pointer-events: none;
   }
   .step {
@@ -462,13 +462,13 @@
   }
   .is-mobile #dockPanel {
     display: none;
-    padding: 14px; max-height: 38vh; overflow-y: auto;
+    padding: 10px; max-height: 24vh; overflow-y: auto;
     border-bottom: 1px solid var(--line);
   }
-  .is-mobile #dockPanel .block + .block { margin-top: 16px; }
+  .is-mobile #dockPanel .block + .block { margin-top: 8px; }
   .is-mobile #dockPanel h2 {
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
-    color: var(--text-dim); margin: 0 0 8px;
+    color: var(--text-dim); margin: 0 0 6px;
   }
   .is-mobile #dockTabs { display: flex; gap: 6px; padding: 10px 10px 4px; }
   .is-mobile #dockBar { padding: 12px 12px 14px; }
@@ -478,6 +478,21 @@
   .is-mobile #dockBar #price { font-size: 17px; margin: 0; }
   .is-mobile #dockBar #priceMeta { font-size: 10px; margin: 2px 0 0; }
   .is-mobile #dockBar .confirm { width: auto; flex: none; padding: 11px 16px; }
+
+  /* El formulario de pedido baja 30px para que no choque con la barra de pasos. */
+  .is-mobile #orderModal .card { margin-top: 30px; }
+
+  #btnStemDone { display: none; }
+  /* Botón flotante para salir del modo "Mover el palito" (solo móvil): aparece
+     cuando la barra inferior se colapsa para dejar ver la pieza completa. */
+  .is-mobile #btnStemDone {
+    position: fixed; z-index: 9;
+    bottom: calc(20px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+    padding: 12px 22px; font-size: 13px; font-weight: 600;
+    background: var(--accent); color: #0a0a0a; border: none; border-radius: 30px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+    display: none; align-items: center; gap: 8px;
+  }
 </style>
 </head>
 <body>
@@ -561,6 +576,8 @@
     </div>
     <div id="dockBar"></div>
   </div>
+
+  <button type="button" id="btnStemDone"></button>
 
   <div id="stepper">
     <button type="button" class="step" id="stepImport"><div class="step-dot"></div><div class="step-label">1 · Importar</div></button>
@@ -688,6 +705,7 @@ const I18N_3D = {
   blockStem: { es: 'Palito', en: 'Stem' },
   stemSublabel: { es: 'tipo de poste', en: 'post type' },
   btnStemToggle: { es: 'Mover el palito', en: 'Move the stem' },
+  stemDone: { es: 'Listo', en: 'Done' },
   btnTutorial3d: { es: 'Ver tutorial', en: 'Watch tutorial' },
   tutCloseBtn: { es: 'Cerrar tutorial', en: 'Close tutorial' },
   blockPrice: { es: 'Valor estimado', en: 'Estimated value' },
@@ -736,6 +754,7 @@ function applyLanguage3d() {
   document.getElementById('btnFlip').textContent = t3('btnFlip');
   document.querySelector('#blockStem h2').innerHTML = t3('blockStem') + ' <span class="sublabel">' + t3('stemSublabel') + '</span>';
   document.getElementById('btnStemToggle').textContent = t3('btnStemToggle');
+  document.getElementById('btnStemDone').textContent = t3('stemDone');
   document.getElementById('btnTutorial3d').textContent = tutorial3dOpen ? t3('tutCloseBtn') : t3('btnTutorial3d');
   document.querySelector('#blockPrice h2').textContent = t3('blockPrice');
   document.getElementById('btnConfirm').textContent = t3('btnConfirm');
@@ -1345,10 +1364,12 @@ function applyPairTransform() {
 }
 applyPairTransform();
 
-/* Encuadre inicial en función del tamaño real de la pieza. */
+/* Encuadre inicial en función del tamaño real de la pieza. En celular la
+   cámara arranca más lejos para que el par completo entre holgado en la
+   pantalla, por encima de la barra inferior. */
 (function frameCamera() {
   const span = Math.max(spacing * 2 + pieceSize.x, STEM_LENGTH_MM);
-  const dist = span * 1.6;
+  const dist = span * (isMobile ? 2.1 : 1.6);
   camera.position.set(dist * 0.35, dist * 0.32, dist);
   camera.updateProjectionMatrix();
   controls.update();
@@ -1613,8 +1634,9 @@ gumball.addEventListener('dragging-changed', (e) => { controls.enabled = !e.valu
 gumball.addEventListener('objectChange', onStemMoved);
 
 const btnStemToggle = document.getElementById('btnStemToggle');
-btnStemToggle.addEventListener('click', () => {
-  const active = !gumball.enabled;
+const btnStemDone = document.getElementById('btnStemDone');
+const mobileDock = document.getElementById('mobileDock');
+function setStemMove(active) {
   gumball.visible = active;
   gumball.enabled = active;
   btnStemToggle.classList.toggle('active', active);
@@ -1624,7 +1646,15 @@ btnStemToggle.addEventListener('click', () => {
   } else {
     controls.autoRotate = true;
   }
-});
+  // En celular el modo deja ver la pieza completa: la barra inferior se
+  // colapsa y aparece un botón flotante para salir del modo.
+  if (isMobile) {
+    mobileDock.style.display = active ? 'none' : '';
+    btnStemDone.style.display = active ? 'flex' : 'none';
+  }
+}
+btnStemToggle.addEventListener('click', () => { setStemMove(!gumball.enabled); });
+btnStemDone.addEventListener('click', () => { setStemMove(false); });
 
 /* ---------- Voltear un lado del arete ---------- */
 document.getElementById('btnFlip').addEventListener('click', () => {
