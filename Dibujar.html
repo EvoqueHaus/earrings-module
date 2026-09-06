@@ -62,7 +62,7 @@
     position: absolute; top: 0; left: 0; right: 0; z-index: 2;
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     padding: 14px 20px;
-    background: linear-gradient(to bottom, rgba(28,28,30,0.9), transparent);
+    background: var(--bg);
     pointer-events: none;
   }
   #topbar h1 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
@@ -145,8 +145,11 @@
   button.danger { color: var(--danger); }
   button.active { border-color: var(--accent); color: var(--accent); }
 
-  #btnUndo, #btnRedo { font-size: 20px; padding: 6px 10px; min-width: 38px; display: flex; align-items: center; gap: 6px; }
-  #btnUndo .undo-label, #btnRedo .undo-label { font-size: 12px; }
+  /* Deshacer/Rehacer comparten renglón: uno a la izquierda, otro a la derecha. */
+  .undo-row { display: flex; gap: 6px; }
+  #drawPanel .undo-row button { width: auto; margin-bottom: 0; }
+  #btnUndo, #btnRedo { font-size: 16px; padding: 8px 2px; min-width: 0; flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; }
+  #btnUndo .undo-label, #btnRedo .undo-label { font-size: 11px; }
 
   #bgImage {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -157,7 +160,7 @@
     position: absolute; bottom: 0; left: 0; right: 0; z-index: 2;
     display: flex; align-items: center; justify-content: center; gap: 28px;
     padding: 16px 0;
-    background: linear-gradient(to top, rgba(28,28,30,0.9), transparent);
+    background: var(--bg);
     pointer-events: none;
   }
   /* ---------- ILUSTRACIONES DE FUNCIONES DEL MOUSE (escritorio) ----------
@@ -567,11 +570,15 @@
         <h2 data-i18n="scaleTitle">Escala</h2>
         <div class="slider-label"><span data-i18n="scale">Escala</span><span id="desktopScaleVal">100%</span></div>
         <input id="desktopScaleSlider" type="range" min="50" max="250" value="100">
+        <div class="slider-label"><span data-i18n="rotation">Rotación</span><span id="desktopRotVal">0°</span></div>
+        <input id="desktopRotSlider" type="range" min="-180" max="180" value="0">
       </div>
       <div class="block">
         <h2 data-i18n="controls">Controles</h2>
-        <button id="btnUndo" disabled title="Deshacer (Ctrl+Z)" aria-label="Deshacer"><span class="undo-icon">↶</span><span class="undo-label" data-i18n="undo">Deshacer</span></button>
-        <button id="btnRedo" disabled title="Rehacer (Ctrl+Y)" aria-label="Rehacer"><span class="undo-icon">↷</span><span class="undo-label" data-i18n="redo">Rehacer</span></button>
+        <div class="undo-row">
+          <button id="btnUndo" disabled title="Deshacer (Ctrl+Z)" aria-label="Deshacer"><span class="undo-icon">↶</span><span class="undo-label" data-i18n="undo">Deshacer</span></button>
+          <button id="btnRedo" disabled title="Rehacer (Ctrl+Y)" aria-label="Rehacer"><span class="undo-icon">↷</span><span class="undo-label" data-i18n="redo">Rehacer</span></button>
+        </div>
         <button id="btnTrace" data-i18n="traceBtn">Calcar imagen</button>
         <button id="btnSmooth" disabled data-i18n="smoothBtn">Suavizar trazo</button>
         <button id="btnNodeEdit" disabled data-i18n="nodeEditBtn">Editar dibujo</button>
@@ -651,8 +658,8 @@
    ============================================================ */
 const SQUARE_MM = 10;
 const CLOSE_THRESHOLD_MM = 0.2;
-const MIN_ZOOM = 8;
-const MAX_ZOOM = 400;
+const MIN_ZOOM = 20;
+const MAX_ZOOM = 98;
 
 /* Tolerancia de desborde: por debajo de esto la diferencia no es real, es
    ruido de coma flotante del escalado. */
@@ -1720,6 +1727,7 @@ function resetAll() {
   undoStack.length = 0;
   redoStack.length = 0;
   updateUndoRedoButtons();
+  resetDesktopRotationUI();
   if (traceRaster) traceRaster.remove();
   traceRaster = null; traceSrc = null; traceLocked = false;
   traceBlockedSvg = false;
@@ -2316,6 +2324,35 @@ desktopScaleSlider.addEventListener('input', (e) => {
   desktopScaleFactor = percent / 100;
   $('desktopScaleVal').textContent = percent + '%';
   revalidateBridge();
+});
+
+/* ---------- Rotación en escritorio ----------
+   Gira todo el motivo (el dibujo, no el calco) alrededor del centro del área
+   de trabajo. El ángulo queda horneado en los segmentos al soltar y el
+   control vuelve a 0°, así funciona como una "herramienta de girar". */
+const desktopRotSlider = $('desktopRotSlider');
+let desktopRotation = 0;
+let rotActive = false;
+
+function resetDesktopRotationUI() {
+  desktopRotation = 0;
+  if (desktopRotSlider) { desktopRotSlider.value = '0'; }
+  const lbl = $('desktopRotVal'); if (lbl) lbl.textContent = '0°';
+}
+
+desktopRotSlider.addEventListener('input', (e) => {
+  if (!outerPath) return;
+  if (!rotActive) { saveUndoState(); rotActive = true; }
+  const next = Number(e.target.value);
+  const delta = next - desktopRotation;
+  outerPath.rotate(delta, new paper.Point(SQUARE_MM / 2, SQUARE_MM / 2));
+  desktopRotation = next;
+  $('desktopRotVal').textContent = next + '°';
+  revalidateBridge();
+});
+desktopRotSlider.addEventListener('change', () => {
+  resetDesktopRotationUI();
+  rotActive = false;
 });
 
 /* Retroceder: vuelve directo a la biblioteca (en móvil es la única fuente de
